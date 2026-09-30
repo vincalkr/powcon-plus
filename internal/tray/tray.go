@@ -312,6 +312,15 @@ func (s *sniMethods) SecondaryActivate(x, y int32) *dbus.Error {
 	return nil
 }
 
+// XAyatanaSecondaryActivate is the ayatana-flavored middle-click variant
+// (timestamp only); the GNOME extension prefers it when present.
+func (s *sniMethods) XAyatanaSecondaryActivate(timestamp uint32) *dbus.Error {
+	if s.it.onSecondaryActivate != nil {
+		go s.it.onSecondaryActivate(0, 0)
+	}
+	return nil
+}
+
 func (s *sniMethods) ContextMenu(x, y int32) *dbus.Error {
 	if s.it.onContextMenu != nil {
 		go s.it.onContextMenu(x, y)

@@ -543,10 +543,16 @@ func (a *App) alertThreshold() float64 {
 	return a.alertW
 }
 
+// launchWindow opens the detail window in a detached process. When the
+// running build is headless, it prefers the "-gui" sibling binary, which
+// carries the window subcommand.
 func (a *App) launchWindow() {
 	exe, err := autostart.SelfPath()
 	if err != nil {
 		return
+	}
+	if guiExe := filepath.Join(filepath.Dir(exe), filepath.Base(exe)+"-gui"); pathExists(guiExe) {
+		exe = guiExe
 	}
 	cmd := exec.Command(exe, "window")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -554,6 +560,12 @@ func (a *App) launchWindow() {
 	if err := cmd.Start(); err != nil {
 		a.log.Printf("apertura finestra: %v", err)
 	}
+}
+
+// pathExists reports whether path exists (any file kind).
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // --- streaming to GUI/CLI ---
