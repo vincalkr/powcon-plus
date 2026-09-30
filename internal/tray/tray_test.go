@@ -3,6 +3,7 @@ package tray
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,12 +74,22 @@ func TestExportRoundTrip(t *testing.T) {
 	})
 	menu := it.conn.Object(it.busName, it.menuPath)
 	var rev uint32
-	var layout dbus.Variant
+	var layout layoutNode
 	if err := menu.Call(ifaceMenu+".GetLayout", 0, int32(0), int32(-1), []string{}).Store(&rev, &layout); err != nil {
 		t.Fatalf("GetLayout: %v", err)
 	}
-	if layout.Signature().String() != "(ia{sv}av)" {
-		t.Fatalf("firma GetLayout = %s", layout.Signature().String())
+	// the layout must be a plain (ia{sv}av) struct with the root children
+	if layout.V0 != 0 || len(layout.V2) == 0 {
+		t.Fatalf("GetLayout layout inatteso: id=%d children=%d", layout.V0, len(layout.V2))
+	}
+	// Introspect must expose the SNI interface with Activate (GNOME needs it)
+	var xml string
+	if err := it.conn.Object(it.busName, it.path).
+		Call("org.freedesktop.Introspectable.Introspect", 0).Store(&xml); err != nil {
+		t.Fatalf("Introspect: %v", err)
+	}
+	if !strings.Contains(xml, "org.kde.StatusNotifierItem") || !strings.Contains(xml, "Activate") {
+		t.Error("Introspect: XML senza interfaccia SNI o metodo Activate")
 	}
 	var props []layoutProps
 	if err := menu.Call(ifaceMenu+".GetGroupProperties", 0, []int32{}, []string{}).Store(&props); err != nil {

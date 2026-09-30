@@ -170,15 +170,18 @@ type layoutNode struct {
 	V2 []dbus.Variant
 }
 
-func (mm *menuMethods) GetLayout(parent int32, recursionDepth int32, propertyNames []string) (uint32, dbus.Variant, *dbus.Error) {
+// GetLayout returns (revision, layout). The layout must be returned as a
+// plain (ia{sv}av) struct — not wrapped in a variant — because the GNOME
+// appindicator extension validates the reply signature strictly and drops
+// the whole menu otherwise.
+func (mm *menuMethods) GetLayout(parent int32, recursionDepth int32, propertyNames []string) (uint32, layoutNode, *dbus.Error) {
 	mm.m.mu.Lock()
 	defer mm.m.mu.Unlock()
 	node := mm.m.find(mm.m.root, parent)
 	if node == nil {
-		return mm.m.rev, dbus.MakeVariant(layoutNode{V0: parent, V1: map[string]dbus.Variant{}}), nil
+		return mm.m.rev, layoutNode{V0: parent, V1: map[string]dbus.Variant{}}, nil
 	}
-	v := dbus.MakeVariant(mm.m.layoutOf(node, recursionDepth, propertyNames))
-	return mm.m.rev, v, nil
+	return mm.m.rev, mm.m.layoutOf(node, recursionDepth, propertyNames), nil
 }
 
 func (mm *menuMethods) GetGroupProperties(ids []int32, propertyNames []string) ([]layoutProps, *dbus.Error) {

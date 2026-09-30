@@ -111,7 +111,7 @@ func New(o Options) (*Item, error) {
 	// Ayatana properties: make the text appear in the GNOME bar
 	it.props["XAyatanaLabel"] = dbus.MakeVariant("")
 	it.props["XAyatanaLabelGuide"] = dbus.MakeVariant("")
-	it.props["XAyatanaOrderingIndex"] = dbus.MakeVariant(int32(0))
+	it.props["XAyatanaOrderingIndex"] = dbus.MakeVariant(uint32(0))
 	it.props["IconAccessibleDesc"] = dbus.MakeVariant(o.Title)
 	it.props["AttentionAccessibleDesc"] = dbus.MakeVariant("")
 
@@ -119,6 +119,9 @@ func New(o Options) (*Item, error) {
 		return nil, err
 	}
 	if err := conn.Export(&propsHandler{it}, o.Path, ifaceProps); err != nil {
+		return nil, err
+	}
+	if err := conn.Export(introspectMethods{}, o.Path, "org.freedesktop.Introspectable"); err != nil {
 		return nil, err
 	}
 	if err := conn.Export(&menuMethods{it.menu}, o.MenuPath, ifaceMenu); err != nil {
@@ -297,6 +300,65 @@ type toolTip struct {
 
 // sniMethods exposes the methods of the SNI interface.
 type sniMethods struct{ it *Item }
+
+// introspectMethods implements org.freedesktop.Introspectable on the SNI
+// object. The GNOME appindicator extension calls Introspect to detect
+// method support (e.g. Activate); without it left-click is ignored.
+type introspectMethods struct{}
+
+func (introspectMethods) Introspect() (string, *dbus.Error) {
+	return sniIntrospectionXML, nil
+}
+
+const sniIntrospectionXML = `
+<node>
+  <interface name="org.kde.StatusNotifierItem">
+    <property name="Category" type="s" access="read"/>
+    <property name="Id" type="s" access="read"/>
+    <property name="Title" type="s" access="read"/>
+    <property name="Status" type="s" access="read"/>
+    <property name="WindowId" type="i" access="read"/>
+    <property name="IconThemePath" type="s" access="read"/>
+    <property name="Menu" type="o" access="read"/>
+    <property name="ItemIsMenu" type="b" access="read"/>
+    <property name="IconName" type="s" access="read"/>
+    <property name="IconAccessibleDesc" type="s" access="read"/>
+    <property name="IconPixmap" type="a(iiay)" access="read"/>
+    <property name="OverlayIconName" type="s" access="read"/>
+    <property name="OverlayIconPixmap" type="a(iiay)" access="read"/>
+    <property name="AttentionIconName" type="s" access="read"/>
+    <property name="AttentionIconPixmap" type="a(iiay)" access="read"/>
+    <property name="AttentionMovieName" type="s" access="read"/>
+    <property name="AttentionAccessibleDesc" type="s" access="read"/>
+    <property name="ToolTip" type="(sa(iiay)ss)" access="read"/>
+    <property name="XAyatanaLabel" type="s" access="read"/>
+    <property name="XAyatanaLabelGuide" type="s" access="read"/>
+    <property name="XAyatanaOrderingIndex" type="u" access="read"/>
+    <method name="ContextMenu">
+      <arg name="x" type="i" direction="in"/>
+      <arg name="y" type="i" direction="in"/>
+    </method>
+    <method name="Activate">
+      <arg name="x" type="i" direction="in"/>
+      <arg name="y" type="i" direction="in"/>
+    </method>
+    <method name="SecondaryActivate">
+      <arg name="x" type="i" direction="in"/>
+      <arg name="y" type="i" direction="in"/>
+    </method>
+    <method name="XAyatanaSecondaryActivate">
+      <arg name="timestamp" type="u" direction="in"/>
+    </method>
+    <method name="Scroll">
+      <arg name="delta" type="i" direction="in"/>
+      <arg name="orientation" type="s" direction="in"/>
+    </method>
+    <method name="ProvideXdgActivationToken">
+      <arg name="token" type="s" direction="in"/>
+    </method>
+  </interface>
+</node>
+`
 
 func (s *sniMethods) Activate(x, y int32) *dbus.Error {
 	if s.it.onActivate != nil {
