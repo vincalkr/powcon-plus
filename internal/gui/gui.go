@@ -66,6 +66,7 @@ func Run(o Options) error {
 	w.Resize(fyne.NewSize(760, 560))
 	w.SetOnClosed(u.stop)
 	u.start()
+	w.Show() // map the window before entering the event loop (Fyne does not auto-show)
 	a.Run() // blocks until the last window is closed
 	u.stop()
 	return nil
