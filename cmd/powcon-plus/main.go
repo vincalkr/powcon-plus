@@ -59,6 +59,8 @@ func main() {
 		err = cmdInstallAutostart(args)
 	case "uninstall-autostart":
 		err = cmdUninstallAutostart(args)
+	case "uninstall":
+		err = cmdUninstall(args)
 	case "autostart-status":
 		err = cmdAutostartStatus(args)
 	case "init-config":
@@ -91,6 +93,7 @@ Uso:
   powcon-plus sensors               elenca i canali hwmon del PSU rilevati
   powcon-plus install-autostart [--mode xdg|systemd]
   powcon-plus uninstall-autostart
+  powcon-plus uninstall [--purge]
   powcon-plus autostart-status
   powcon-plus init-config           scrive ~/.config/powcon-plus/config.toml
 
@@ -398,6 +401,79 @@ func cmdUninstallAutostart(args []string) error {
 		fmt.Println("rimosso:", p)
 	default:
 		return fmt.Errorf("mode %q non valido (xdg|systemd)", *mode)
+	}
+	return nil
+}
+
+// cmdUninstall removes the daemon (if running), the autostart entries, the
+// installed binaries and, with --purge, the data and configuration dirs.
+func cmdUninstall(args []string) error {
+	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
+	purge := fs.Bool("purge", false, "rimuove anche dati e configurazione")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load("")
+	if err != nil {
+		return err
+	}
+	var removed []string
+	add := func(s string) {
+		removed = append(removed, s)
+		fmt.Println(" -", s)
+	}
+
+	// 1. stop the running daemon, if any
+	sock := filepath.Join(cfg.DataDir, "control.sock")
+	if _, serr := os.Stat(sock); serr == nil {
+		if _, qerr := ctl.Call(sock, ctl.Request{Cmd: "quit"}); qerr == nil {
+			add("daemon in esecuzione: fermato")
+		}
+		time.Sleep(300 * time.Millisecond) // let the socket close
+	}
+
+	// 2. autostart entries (XDG and systemd user unit)
+	if ok, p := autostart.XDGInstalled(); ok {
+		if r, rerr := autostart.RemoveXDG(); rerr == nil && r {
+			add("autostart XDG: " + p)
+		}
+	}
+	if unit, uerr := autostart.UnitPath(); uerr == nil {
+		if _, serr := os.Stat(unit); serr == nil {
+			autostart.SystemctlUser("disable", autostart.AppID+".service")
+			autostart.SystemctlUser("stop", autostart.AppID+".service")
+			if rerr := os.Remove(unit); rerr == nil {
+				add("unit systemd: " + unit)
+				autostart.SystemctlUser("daemon-reload")
+			}
+		}
+	}
+
+	// 3. binaries: the current executable and the optional "-gui" sibling
+	if exe, eerr := autostart.SelfPath(); eerr == nil {
+		for _, p := range []string{exe, exe + "-gui"} {
+			if rerr := os.Remove(p); rerr == nil {
+				add("binario: " + p)
+			}
+		}
+	}
+
+	// 4. data and configuration, only with --purge
+	if *purge {
+		if rerr := os.RemoveAll(cfg.DataDir); rerr == nil {
+			add("dati: " + cfg.DataDir)
+		}
+		cfgDir := filepath.Dir(config.Path())
+		if rerr := os.RemoveAll(cfgDir); rerr == nil {
+			add("configurazione: " + cfgDir)
+		}
+	} else {
+		fmt.Println("Dati (" + cfg.DataDir + ") e configurazione vengono mantenuti; usa --purge per rimuoverli.")
+	}
+
+	if len(removed) == 0 {
+		fmt.Println("niente da rimuovere (o già assente).")
 	}
 	return nil
 }

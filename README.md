@@ -70,6 +70,19 @@ quello da mettere in autostart: con la spunta in UI o
 `powcon-plus install-autostart` genera la desktop entry che punta a sé
 stesso.
 
+## Disinstallazione
+
+```bash
+powcon-plus uninstall          # ferma il daemon, toglie l'autostart e i binari
+powcon-plus uninstall --purge  # in più cancella dati (~/.local/share/powcon-plus) e config
+```
+
+`uninstall` rimuove: il daemon in esecuzione, la desktop entry XDG,
+l'eventuale unit systemd utente e i binari installati (più il fratello
+`-gui`). Senza `--purge` dati e configurazione restano, così una
+reinstallazione ritrova lo storico; con `--purge` torna come se non fosse
+mai stato installato.
+
 ## Icona di tray
 
 | Interazione | Effetto |

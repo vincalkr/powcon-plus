@@ -146,6 +146,7 @@ powcon-plus ctl status|pause|resume|label-mode mode=both|alert w=800|quit
 powcon-plus sensors                canali hwmon rilevati (diagnostica)
 powcon-plus install-autostart [--mode xdg|systemd] [--exec PATH]
 powcon-plus uninstall-autostart | autostart-status
+powcon-plus uninstall [--purge]      fermo daemon + autostart + binari (+ dati/config)
 powcon-plus init-config | version
 ```
 
