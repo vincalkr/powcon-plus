@@ -1,0 +1,44 @@
+# powcon-plus — esempio di configurazione
+# Copiare in ~/.config/powcon-plus/config.toml (o eseguire `powcon-plus init-config`).
+
+# hwmon del PSU: vuoto = auto-detect del chip "corsairpsu".
+# Puoi indicare "hwmon8" oppure il path assoluto /sys/class/hwmon/hwmon8.
+sensor = ""
+
+# Frequenza di lettura. Sotto 200ms non ha senso: il PSU aggrega su ~1s.
+poll_interval = "1s"
+
+# Cosa mostrare accanto all'icona: power | energy | both | none
+label_mode = "power"
+
+# Formattazione printf (argomento float64).
+format_w = "%.0f W"
+format_wh = "%.2f kWh"
+
+# Tariffa per la stima del costo (€/kWh).
+price_eur_per_kwh = 0.25
+
+# Avviso desktop quando l'assorbimento resta sopra la soglia.
+# alert_power_w = 0 disattiva l'avviso.
+alert_power_w = 0
+alert_sustain = "15s"
+alert_cooldown = "5m"
+
+# Persistenza dei campioni grezzi (JSONL, un file per giorno).
+sample_store = true
+sample_interval = "10s"
+retention_days = 31
+
+# Vuoto = ~/.local/share/powcon-plus
+data_dir = ""
+
+# Evita due copie del daemon (flock su <data_dir>/lock).
+single_instance = true
+
+# Apre anche la finestra di dettaglio all'avvio del daemon.
+start_window = false
+
+# Icona: "pixmap" = glifo generato dal programma (funziona ovunque),
+# "name" = icona di tema freedesktop indicata da icon_name.
+icon_mode = "pixmap"
+icon_name = "powersupply"
