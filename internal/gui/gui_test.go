@@ -60,11 +60,12 @@ func TestApplySnapshotPopulatesWindow(t *testing.T) {
 	if got := u.power.Text; got != "148 W" {
 		t.Errorf("power = %q, expected %q", got, "148 W")
 	}
-	if !strings.Contains(u.summary.Text, "2.40 kWh") ||
-		!strings.Contains(u.summary.Text, "0.60 €") ||
-		!strings.Contains(u.summary.Text, "media 120 W") ||
-		!strings.Contains(u.summary.Text, "picco 312 W") {
-		t.Errorf("summary = %q", u.summary.Text)
+	summary := captionText(u.summary)
+	if !strings.Contains(summary, "2.40 kWh") ||
+		!strings.Contains(summary, "0.60 €") ||
+		!strings.Contains(summary, "media 120 W") ||
+		!strings.Contains(summary, "picco 312 W") {
+		t.Errorf("summary = %q", summary)
 	}
 	for _, c := range []struct{ key, want string }{
 		{"vin", "230.4"}, {"v12", "12.10"}, {"i12", "8.20"},

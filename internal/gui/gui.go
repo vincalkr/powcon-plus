@@ -97,18 +97,18 @@ type windowUI struct {
 
 	root         *fyne.Container
 	power        *widget.Label
-	summary      *widget.Label
-	daemon       *widget.Label
+	summary      *widget.RichText
+	daemon       *widget.RichText
 	chart        *powerChart
 	cells        map[string]*widget.Label
-	gridCaps     map[string]*widget.Label
+	gridCaps     map[string]*widget.RichText
 	table        *widget.Table
 	pauseBtn     *widget.Button
 	modeSel      *widget.Select
 	langSel      *widget.Select
 	autostart    *widget.Check
-	labelCaption *widget.Label
-	langCaption  *widget.Label
+	labelCaption *widget.RichText
+	langCaption  *widget.RichText
 	reportBtn    *widget.Button
 	quitBtn      *widget.Button
 
@@ -146,9 +146,9 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 		"p12", "p5", "p33", "tvrm", "tcase", "fan"} {
 		u.cells[k] = widget.NewLabel("—")
 	}
-	u.gridCaps = map[string]*widget.Label{}
+	u.gridCaps = map[string]*widget.RichText{}
 	for _, k := range []string{"voltage", "current", "power", "vin", "tvrm", "tcase", "fan"} {
-		u.gridCaps[k] = caption(u.cat.Get("ui.grid." + k))
+		u.gridCaps[k] = newCaption(u.cat.Get("ui.grid." + k))
 	}
 
 	// command bar
@@ -175,19 +175,19 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 	u.autoSync = true // initial sync does not command the daemon
 	u.autostart.SetChecked(false)
 	u.autoSync = false
-	u.labelCaption = caption(u.cat.Get("ui.bar.label"))
-	u.langCaption = caption(u.cat.Get("ui.bar.language"))
+	u.labelCaption = newCaption(u.cat.Get("ui.bar.label"))
+	u.langCaption = newCaption(u.cat.Get("ui.bar.language"))
 	bar := container.NewHBox(u.pauseBtn, u.labelCaption, u.modeSel,
 		u.autostart, u.langCaption, u.langSel, u.reportBtn, u.quitBtn)
 
 	// daemon status display (on the right in the header)
-	u.daemon = caption("…")
+	u.daemon = newCaption("…")
 
 	// header: large power + summary + daemon state
 	u.power = widget.NewLabel("—")
 	u.power.SizeName = theme.SizeNameHeadingText
 	u.power.Importance = widget.HighImportance
-	u.summary = caption(u.cat.Get("ui.header.waiting"))
+	u.summary = newCaption(u.cat.Get("ui.header.waiting"))
 	header := container.NewBorder(nil, nil, nil, u.daemon,
 		container.NewVBox(u.power, u.summary))
 
@@ -197,7 +197,7 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 
 	// rails grid +12V / +5V / +3.3V
 	railGrid := container.NewGridWithColumns(4,
-		caption(""), caption("+12 V"), caption("+5 V"), caption("+3.3 V"),
+		newCaption(""), newCaption("+12 V"), newCaption("+5 V"), newCaption("+3.3 V"),
 		u.gridCaps["voltage"], u.cells["v12"], u.cells["v5"], u.cells["v33"],
 		u.gridCaps["current"], u.cells["i12"], u.cells["i5"], u.cells["i33"],
 		u.gridCaps["power"], u.cells["p12"], u.cells["p5"], u.cells["p33"])
@@ -257,18 +257,35 @@ func (u *windowUI) modeOptions() []string {
 	return opts
 }
 
-func caption(text string) *widget.Label {
-	l := widget.NewLabel(text)
-	l.Importance = widget.LowImportance
-	return l
+// newCaption returns a muted caption label (placeholder color, caption
+// size). The placeholder color stays readable in both the light and the
+// dark theme, unlike the "disabled" color used by widget.LowImportance,
+// which is almost invisible on dark backgrounds.
+func newCaption(text string) *widget.RichText {
+	rt := widget.NewRichTextWithText(text)
+	seg := rt.Segments[0].(*widget.TextSegment)
+	seg.Style.ColorName = theme.ColorNamePlaceHolder
+	seg.Style.SizeName = theme.SizeNameCaptionText
+	return rt
+}
+
+// setCaption updates the text of a caption created by newCaption.
+func setCaption(rt *widget.RichText, text string) {
+	rt.Segments[0].(*widget.TextSegment).Text = text
+	rt.Refresh()
+}
+
+// captionText reads the text of a caption (used by the headless tests).
+func captionText(rt *widget.RichText) string {
+	return rt.Segments[0].(*widget.TextSegment).Text
 }
 
 // retranslate re-renders every static label with the current catalog. It
 // runs from the UI thread (the language select callback).
 func (u *windowUI) retranslate() {
 	u.win.SetTitle(u.cat.Get("ui.window.title"))
-	u.labelCaption.SetText(u.cat.Get("ui.bar.label"))
-	u.langCaption.SetText(u.cat.Get("ui.bar.language"))
+	setCaption(u.labelCaption, u.cat.Get("ui.bar.label"))
+	setCaption(u.langCaption, u.cat.Get("ui.bar.language"))
 	u.reportBtn.SetText(u.cat.Get("ui.bar.report"))
 	u.quitBtn.SetText(u.cat.Get("ui.bar.quit"))
 	u.autostart.SetText(u.cat.Get("ui.bar.autostart"))
@@ -283,14 +300,14 @@ func (u *windowUI) retranslate() {
 	u.syncingMode = false
 	u.modeSel.Refresh()
 	for key, l := range u.gridCaps {
-		l.SetText(u.cat.Get("ui.grid." + key))
+		setCaption(l, u.cat.Get("ui.grid." + key))
 	}
 	u.chart.SetCatalog(u.cat)
 	if u.haveSnap {
-		u.summary.SetText(u.cat.Sprintf("ui.summary.today",
+		setCaption(u.summary, u.cat.Sprintf("ui.summary.today",
 			u.lastSnap.TodayWh/1000, u.lastSnap.TodayCostEuro, u.lastSnap.TodayAvgW, u.lastSnap.TodayMaxW))
 	} else {
-		u.summary.SetText(u.cat.Get("ui.header.waiting"))
+		setCaption(u.summary, u.cat.Get("ui.header.waiting"))
 	}
 	u.table.Refresh()
 	u.syncingLang = true
@@ -319,7 +336,7 @@ func (u *windowUI) render(s status.Snapshot) {
 	u.haveSnap = true
 	u.lastMode = s.LabelMode
 	u.power.SetText(s.WLabel(u.cfg.FormatW))
-	u.summary.SetText(u.cat.Sprintf("ui.summary.today",
+	setCaption(u.summary, u.cat.Sprintf("ui.summary.today",
 		s.TodayWh/1000, s.TodayCostEuro, s.TodayAvgW, s.TodayMaxW))
 
 	val := func(v float64, format string) string {
@@ -656,7 +673,7 @@ func (u *windowUI) setStatusLine(active bool, note string) {
 		txt += " · " + note
 	}
 	fyne.Do(func() {
-		u.daemon.SetText(txt)
+		setCaption(u.daemon, txt)
 		if active {
 			u.pauseBtn.Enable()
 		} else {
@@ -752,7 +769,9 @@ type chartRenderer struct {
 }
 
 func newChartRenderer(c *powerChart) *chartRenderer {
-	muted := theme.Color(theme.ColorNameDisabled)
+	// Placeholder color (readable in both themes), not the almost-invisible
+	// "disabled" color used for captions.
+	muted := theme.Color(theme.ColorNamePlaceHolder)
 	r := &chartRenderer{
 		c:     c,
 		bg:    canvas.NewRectangle(theme.Color(theme.ColorNameInputBackground)),
