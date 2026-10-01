@@ -11,6 +11,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 
 	"powcon-plus/internal/config"
 	"powcon-plus/internal/energy"
@@ -95,6 +96,25 @@ func TestApplySnapshotPopulatesWindow(t *testing.T) {
 	applySnapshot(u.win, off)
 	if u.cells["v12"].Text != "—" {
 		t.Errorf("offline: v12 = %q, expected %q", u.cells["v12"].Text, "—")
+	}
+}
+
+func TestWideEntryMinimumWidthAndTyping(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+
+	e := widget.NewEntry()
+	box := newWideEntry(e, 90)
+	if box.MinSize().Width < 90 {
+		t.Fatalf("wide entry min width = %v, expected >= 90", box.MinSize().Width)
+	}
+
+	w := a.NewWindow("wide")
+	w.SetContent(box)
+	w.Resize(fyne.NewSize(300, 100))
+	test.Type(box, "0.25")
+	if e.Text != "0.25" {
+		t.Errorf("entry text = %q, expected %q", e.Text, "0.25")
 	}
 }
 

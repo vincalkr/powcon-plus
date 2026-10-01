@@ -30,6 +30,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -112,6 +113,7 @@ type windowUI struct {
 	langSel         *widget.Select
 	autostart       *widget.Check
 	priceEntry      *widget.Entry
+	priceEntryBox   *wideEntry
 	currencySel     *widget.Select
 	labelCaption    *widget.RichText
 	langCaption     *widget.RichText
@@ -206,12 +208,14 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 	u.priceEntry = widget.NewEntry()
 	u.priceEntry.PlaceHolder = "0.25"
 	u.priceEntry.OnChanged = u.onPriceEdited
+	// wrap the entry so it keeps a readable width even with short values
+	u.priceEntryBox = newWideEntry(u.priceEntry, 90)
 	u.currencySel = widget.NewSelect(currency.Supported, u.onCurrencyChanged)
 	u.syncingPrice = true // initialization must not command the daemon
 	u.priceEntry.SetText(fmt.Sprintf("%g", cfg.PricePerKWh))
 	u.currencySel.SetSelected(cfg.Currency)
 	u.syncingPrice = false
-	bar2 := container.NewHBox(u.priceCaption, u.priceEntry,
+	bar2 := container.NewHBox(u.priceCaption, u.priceEntryBox,
 		u.currencyCaption, u.currencySel)
 
 	// daemon status display (on the right in the header)
@@ -318,6 +322,76 @@ func setCaption(rt *widget.RichText, text string) {
 func captionText(rt *widget.RichText) string {
 	return rt.Segments[0].(*widget.TextSegment).Text
 }
+
+// wideEntry wraps an entry to give it a minimum width: the stock entry
+// sizes itself on its content, which is too narrow for short values such
+// as "0.25".
+type wideEntry struct {
+	widget.BaseWidget
+	entry *widget.Entry
+	width float32
+}
+
+func newWideEntry(entry *widget.Entry, minW float32) *wideEntry {
+	w := &wideEntry{entry: entry, width: minW}
+	w.ExtendBaseWidget(w)
+	return w
+}
+
+// fyne.Widget
+func (w *wideEntry) CreateRenderer() fyne.WidgetRenderer {
+	return w.entry.CreateRenderer()
+}
+
+func (w *wideEntry) MinSize() fyne.Size {
+	min := w.entry.MinSize()
+	if min.Width < w.width {
+		min.Width = w.width
+	}
+	return min
+}
+
+func (w *wideEntry) Resize(size fyne.Size) {
+	w.BaseWidget.Resize(size)
+	w.entry.Resize(size)
+}
+
+func (w *wideEntry) Move(pos fyne.Position) {
+	w.BaseWidget.Move(pos)
+	w.entry.Move(pos)
+}
+
+func (w *wideEntry) Show() {
+	w.BaseWidget.Show()
+	w.entry.Show()
+}
+
+func (w *wideEntry) Hide() {
+	w.BaseWidget.Hide()
+	w.entry.Hide()
+}
+
+// fyne.Focusable / desktop input: everything is forwarded to the entry.
+func (w *wideEntry) AcceptsFocus() bool { return true }
+func (w *wideEntry) AcceptsTab() bool   { return w.entry.AcceptsTab() }
+func (w *wideEntry) FocusGained()       { w.entry.FocusGained() }
+func (w *wideEntry) FocusLost()         { w.entry.FocusLost() }
+func (w *wideEntry) Cursor() desktop.Cursor {
+	return w.entry.Cursor()
+}
+
+func (w *wideEntry) KeyDown(key *fyne.KeyEvent) { w.entry.KeyDown(key) }
+func (w *wideEntry) KeyUp(key *fyne.KeyEvent)   { w.entry.KeyUp(key) }
+func (w *wideEntry) TypedRune(r rune)           { w.entry.TypedRune(r) }
+func (w *wideEntry) TypedKey(key *fyne.KeyEvent) {
+	w.entry.TypedKey(key)
+}
+
+func (w *wideEntry) Tapped(event *fyne.PointEvent)          { w.entry.Tapped(event) }
+func (w *wideEntry) TappedSecondary(event *fyne.PointEvent) { w.entry.TappedSecondary(event) }
+func (w *wideEntry) DoubleTapped(event *fyne.PointEvent)    { w.entry.DoubleTapped(event) }
+func (w *wideEntry) Dragged(event *fyne.DragEvent)          { w.entry.Dragged(event) }
+func (w *wideEntry) DragEnd()                               { w.entry.DragEnd() }
 
 // retranslate re-renders every static label with the current catalog. It
 // runs from the UI thread (the language select callback).
