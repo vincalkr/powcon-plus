@@ -1,10 +1,11 @@
-# powcon-plus — build, test, installazione
+# powcon-plus — build, test, install
 #
-#   make            bin/powcon-plus (senza cgo) + bin/powcon-plus-gui (Fyne)
-#   make test       unit test + vet
-#   make install    copia in ~/.local/bin e scrive l'autostart XDG
+#   make            bin/powcon-plus (no cgo) + bin/powcon-plus-gui (Fyne)
+#   make test       unit tests + vet
+#   make install    copy to ~/.local/bin and write the XDG autostart entry
 #
-# In un ambiente senza scrittura su GOPATH/GOCACHE (es. sandbox dell'agente):
+# In an environment without write access to GOPATH/GOCACHE (e.g. an agent
+# sandbox):
 #   . hack/env.sh && make
 
 GO      ?= go
@@ -32,7 +33,7 @@ vet:
 	$(GO) vet -tags gui ./...
 
 fmt:
-	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "eseguire: gofmt -w ."; exit 1)
+	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "run: gofmt -w ."; exit 1)
 
 tidy:
 	$(GO) mod tidy
@@ -41,7 +42,7 @@ install: all
 	mkdir -p $(PREFIX)/bin
 	install -m 755 $(HEADLESS) $(PREFIX)/bin/powcon-plus
 	install -m 755 $(GUI) $(PREFIX)/bin/powcon-plus-gui
-	@echo "installato in $(PREFIX)/bin (verificare che sia in PATH)"
+	@echo "installed to $(PREFIX)/bin (make sure it is on PATH)"
 
 uninstall:
 	rm -f $(PREFIX)/bin/powcon-plus $(PREFIX)/bin/powcon-plus-gui
