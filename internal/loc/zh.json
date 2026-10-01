@@ -1,5 +1,5 @@
 {
-  "ui.window.title": "powcon-plus — 工作站功耗",
+  "ui.window.title": "powcon-plus",
   "ui.bar.report": "报告",
   "ui.bar.quit": "退出",
   "ui.bar.about": "信息",
@@ -42,7 +42,7 @@
   "ui.chart.old": "-30 分钟",
   "ui.chart.now": "现在",
   "ui.chart.waiting": "等待采样…",
-  "tray.title": "工作站功耗",
+  "tray.title": "powcon-plus",
   "tray.offline.label": "无",
   "tray.offline.tooltip": "PSU 传感器不可用",
   "tray.tooltip": "交流功率：%.0f W\n今日：%.2f kWh (%.2f %s)\n今日平均：%.0f W · 峰值 %.0f W\n+12V %.1f A · +5V %.1f A · +3.3V %.1f A\nVRM %.1f °C · 机箱 %.1f °C · 风扇 %.0f RPM",

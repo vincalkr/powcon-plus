@@ -1,5 +1,5 @@
 {
-  "ui.window.title": "powcon-plus — workstation consumption",
+  "ui.window.title": "powcon-plus",
   "ui.bar.report": "Report",
   "ui.bar.quit": "Quit",
   "ui.bar.about": "Info",
@@ -42,7 +42,7 @@
   "ui.chart.old": "-30 min",
   "ui.chart.now": "now",
   "ui.chart.waiting": "waiting for samples…",
-  "tray.title": "Workstation consumption",
+  "tray.title": "powcon-plus",
   "tray.offline.label": "n/a",
   "tray.offline.tooltip": "PSU sensor unavailable",
   "tray.tooltip": "AC power: %.0f W\nToday: %.2f kWh (%.2f %s)\nToday avg: %.0f W · peak %.0f W\n+12V %.1f A · +5V %.1f A · +3.3V %.1f A\nVRM %.1f °C · case %.1f °C · fan %.0f RPM",
