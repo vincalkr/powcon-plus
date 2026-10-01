@@ -76,7 +76,7 @@ func New(o Options) (*Item, error) {
 	if conn == nil {
 		c, err := dbus.SessionBus()
 		if err != nil {
-			return nil, fmt.Errorf("bus di sessione: %w", err)
+			return nil, fmt.Errorf("session bus: %w", err)
 		}
 		conn = c
 	}
@@ -278,7 +278,7 @@ func (it *Item) ClaimName() error {
 		return err
 	}
 	if reply != dbus.RequestNameReplyPrimaryOwner {
-		return fmt.Errorf("nome %s già acquisito", it.busName)
+		return fmt.Errorf("name %s already acquired", it.busName)
 	}
 	return nil
 }
@@ -286,7 +286,7 @@ func (it *Item) ClaimName() error {
 func unknownInterface(iface string) *dbus.Error {
 	return &dbus.Error{
 		Name: "org.freedesktop.DBus.Error.UnknownInterface",
-		Body: []interface{}{fmt.Sprintf("oggetto senza interfaccia %s", iface)},
+		Body: []interface{}{fmt.Sprintf("object without interface %s", iface)},
 	}
 }
 
@@ -412,7 +412,7 @@ func (p *propsHandler) Get(iface, key string) (dbus.Variant, *dbus.Error) {
 	if !ok {
 		return dbus.Variant{}, &dbus.Error{
 			Name: "org.freedesktop.DBus.Error.UnknownProperty",
-			Body: []interface{}{"proprietà sconosciuta " + key},
+			Body: []interface{}{"unknown property " + key},
 		}
 	}
 	return v, nil
@@ -428,6 +428,6 @@ func (p *propsHandler) GetAll(iface string) (map[string]dbus.Variant, *dbus.Erro
 func (p *propsHandler) Set(iface, key string, v dbus.Variant) *dbus.Error {
 	return &dbus.Error{
 		Name: "org.freedesktop.DBus.Error.PropertyReadOnly",
-		Body: []interface{}{key + " è in sola lettura"},
+		Body: []interface{}{key + " is read-only"},
 	}
 }

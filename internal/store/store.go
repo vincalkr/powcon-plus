@@ -180,7 +180,7 @@ func AcquireLock(path string) (*Lock, error) {
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
-		return nil, fmt.Errorf("istanza già in esecuzione (%s): %w", path, err)
+		return nil, fmt.Errorf("instance already running (%s): %w", path, err)
 	}
 	if _, err := f.Write([]byte(strconv.Itoa(os.Getpid()) + "\n")); err != nil {
 		f.Close()

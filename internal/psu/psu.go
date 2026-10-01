@@ -19,7 +19,7 @@ import (
 
 // ErrNotReady indicates that the PSU is not exposed (USB cable, driver not
 // loaded, or the device was claimed by another iCUE-like service).
-var ErrNotReady = errors.New("sensore corsairpsu non disponibile")
+var ErrNotReady = errors.New("corsairpsu sensor unavailable")
 
 // Sample is a complete reading of the PSU.
 type Sample struct {
@@ -89,7 +89,7 @@ func Detect(hint string) (string, error) {
 			return "", fmt.Errorf("%s: %w", p, err)
 		}
 		if n := strings.TrimSpace(string(name)); n != Chip {
-			return "", fmt.Errorf("%s: nome chip %q, atteso %q", p, n, Chip)
+			return "", fmt.Errorf("%s: chip name %q, expected %q", p, n, Chip)
 		}
 		return p, nil
 	}
@@ -107,7 +107,7 @@ func Detect(hint string) (string, error) {
 			return m, nil
 		}
 	}
-	return "", fmt.Errorf("%w: nessuno hwmon con name=%q", ErrNotReady, Chip)
+	return "", fmt.Errorf("%w: no hwmon with name=%q", ErrNotReady, Chip)
 }
 
 // Chip is the name exposed by the kernel driver.
@@ -181,7 +181,7 @@ func New(dir string) (*Reader, error) {
 		}
 	}
 	if _, ok := r.Channel[kPT]; !ok {
-		return nil, fmt.Errorf("%w: nessun canale di potenza in %s", ErrNotReady, dir)
+		return nil, fmt.Errorf("%w: no power channel in %s", ErrNotReady, dir)
 	}
 	return r, nil
 }
@@ -238,7 +238,7 @@ func (r *Reader) Read() (*Sample, error) {
 		s.PWM = float64(v)
 	}
 	if s.PTot == 0 && firstErr != nil {
-		return nil, fmt.Errorf("lettura potenza: %w", firstErr)
+		return nil, fmt.Errorf("reading power: %w", firstErr)
 	}
 	return s, nil
 }

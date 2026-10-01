@@ -66,8 +66,8 @@ func InstallXDG(execPath string, extraArgs []string) (string, error) {
 	body := fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=%s
-GenericName=Monitor consumi
-Comment=Potenza ed energia della workstation dal PSU Corsair
+GenericName=Consumption monitor
+Comment=Workstation power and energy from the Corsair PSU
 Exec=%s %s
 Icon=utilities-system-monitor
 Terminal=false
@@ -126,7 +126,7 @@ func InstallSystemd(execPath string, extraArgs []string) (string, error) {
 	}
 	args := append([]string{"run"}, extraArgs...)
 	body := fmt.Sprintf(`[Unit]
-Description=%s — monitor consumi workstation (PSU Corsair)
+Description=%s — workstation power monitor (Corsair PSU)
 Documentation=man:powcon-plus
 PartOf=graphical-session.target
 After=graphical-session.target
@@ -150,7 +150,7 @@ WantedBy=graphical-session.target
 // non-critical environment errors.
 func SystemctlUser(args ...string) error {
 	if _, err := exec.LookPath("systemctl"); err != nil {
-		return fmt.Errorf("systemctl non disponibile")
+		return fmt.Errorf("systemctl not available")
 	}
 	cmd := exec.Command("systemctl", append([]string{"--user"}, args...)...)
 	cmd.Stdout = os.Stdout

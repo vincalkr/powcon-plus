@@ -15,7 +15,7 @@ import (
 // It is skipped when there is no session bus (headless CI).
 func TestExportRoundTrip(t *testing.T) {
 	if os.Getenv("DBUS_SESSION_BUS_ADDRESS") == "" {
-		t.Skip("nessun bus di sessione")
+		t.Skip("no session bus")
 	}
 	it, err := New(Options{ID: "powcon-test", Title: "test"})
 	if err != nil {
@@ -35,10 +35,10 @@ func TestExportRoundTrip(t *testing.T) {
 	}
 	it.SetLabel("123 W")
 	if err := item.Call(ifaceProps+".Get", 0, ifaceSNI, "XAyatanaLabel").Store(&label); err != nil {
-		t.Fatalf("Get XAyatanaLabel dopo SetLabel: %v", err)
+		t.Fatalf("Get XAyatanaLabel after SetLabel: %v", err)
 	}
 	if label != "123 W" {
-		t.Fatalf("etichetta = %q, atteso '123 W'", label)
+		t.Fatalf("label = %q, expected '123 W'", label)
 	}
 
 	var all map[string]dbus.Variant
@@ -48,7 +48,7 @@ func TestExportRoundTrip(t *testing.T) {
 	for _, want := range []string{"Category", "Id", "Title", "Status", "WindowId", "Menu",
 		"ItemIsMenu", "IconName", "IconPixmap", "IconThemePath", "XAyatanaLabel"} {
 		if _, ok := all[want]; !ok {
-			t.Errorf("proprietà %s assente da GetAll", want)
+			t.Errorf("property %s missing from GetAll", want)
 		}
 	}
 
@@ -59,7 +59,7 @@ func TestExportRoundTrip(t *testing.T) {
 		t.Fatalf("Get IconPixmap: %v", err)
 	}
 	if len(px) != 2 || px[0].W != 22 || len(px[0].Data) != 22*22*4 {
-		t.Fatalf("IconPixmap inattesa: %+v", px)
+		t.Fatalf("unexpected IconPixmap: %+v", px)
 	}
 
 	// menu
@@ -80,7 +80,7 @@ func TestExportRoundTrip(t *testing.T) {
 	}
 	// the layout must be a plain (ia{sv}av) struct with the root children
 	if layout.V0 != 0 || len(layout.V2) == 0 {
-		t.Fatalf("GetLayout layout inatteso: id=%d children=%d", layout.V0, len(layout.V2))
+		t.Fatalf("GetLayout unexpected layout: id=%d children=%d", layout.V0, len(layout.V2))
 	}
 	// Introspect must expose the SNI interface with Activate (GNOME needs it)
 	var xml string
@@ -89,14 +89,14 @@ func TestExportRoundTrip(t *testing.T) {
 		t.Fatalf("Introspect: %v", err)
 	}
 	if !strings.Contains(xml, "org.kde.StatusNotifierItem") || !strings.Contains(xml, "Activate") {
-		t.Error("Introspect: XML senza interfaccia SNI o metodo Activate")
+		t.Error("Introspect: XML missing SNI interface or Activate method")
 	}
 	var props []layoutProps
 	if err := menu.Call(ifaceMenu+".GetGroupProperties", 0, []int32{}, []string{}).Store(&props); err != nil {
 		t.Fatalf("GetGroupProperties: %v", err)
 	}
 	if len(props) < 5 {
-		t.Fatalf("GetGroupProperties ha restituito %d item", len(props))
+		t.Fatalf("GetGroupProperties returned %d items", len(props))
 	}
 	foundLabel := false
 	for _, p := range props {
@@ -108,7 +108,7 @@ func TestExportRoundTrip(t *testing.T) {
 		}
 	}
 	if !foundLabel {
-		t.Error("label 'Apri dettaglio' non trovato nelle proprietà del menu")
+		t.Error("label 'Apri dettaglio' not found in the menu properties")
 	}
 
 	// click on an entry
@@ -124,7 +124,7 @@ func TestExportRoundTrip(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("handler del click non invocato")
+		t.Fatal("click handler not invoked")
 	}
 	_ = clicked
 }

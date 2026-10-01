@@ -82,7 +82,7 @@ func TestReadMappingAndScale(t *testing.T) {
 	}
 	for _, c := range checks {
 		if diff := c.got - c.want; diff > 1e-6 || diff < -1e-6 {
-			t.Errorf("%s = %v, atteso %v", c.name, c.got, c.want)
+			t.Errorf("%s = %v, expected %v", c.name, c.got, c.want)
 		}
 	}
 	if s.Time.IsZero() {
@@ -106,12 +106,12 @@ func TestReadReorderedChannels(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.PTot != 250 {
-		t.Fatalf("PTot = %v, atteso 250", s.PTot)
+		t.Fatalf("PTot = %v, expected 250", s.PTot)
 	}
 }
 
 func TestDetectMissing(t *testing.T) {
 	if _, err := Detect("hwmon-non-esistente"); err == nil {
-		t.Fatal("atteso errore per hwmon inesistente")
+		t.Fatal("expected error for missing hwmon")
 	}
 }

@@ -59,13 +59,13 @@ func TestSamplesAppendReadPrune(t *testing.T) {
 		t.Fatal(err)
 	}
 	if removed != 1 {
-		t.Fatalf("file rimossi = %d, atteso 1", removed)
+		t.Fatalf("files removed = %d, expected 1", removed)
 	}
 	if _, err := os.Stat(filepath.Join(s.Dir, "samples-"+old.Local().Format("2006-01-02")+".jsonl")); !os.IsNotExist(err) {
-		t.Error("il file oltre la retention non è stato rimosso")
+		t.Error("file beyond retention was not removed")
 	}
 	if n, err := s.Prune(0); err != nil || n != 0 {
-		t.Errorf("Prune(0) = %d,%v, atteso 0,nil", n, err)
+		t.Errorf("Prune(0) = %d,%v, expected 0,nil", n, err)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestLockExclusive(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := AcquireLock(path); err == nil {
-		t.Fatal("atteso errore di lock esclusivo")
+		t.Fatal("expected an exclusive lock error")
 	}
 	l1.Release()
 	l2, err := AcquireLock(path)

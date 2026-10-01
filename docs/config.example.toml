@@ -42,3 +42,8 @@ start_window = false
 # "name" = icona di tema freedesktop indicata da icon_name.
 icon_mode = "pixmap"
 icon_name = "powersupply"
+
+# Lingua di finestra, tray e notifiche: it | en | de | fr | es | zh | ja.
+# Vuoto = rilevata dalla locale del sistema (fallback: inglese).
+# Si può cambiare anche in tempo reale dalla select "Lingua" nella finestra.
+language = ""

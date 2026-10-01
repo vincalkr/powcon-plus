@@ -19,6 +19,7 @@ import (
 	"powcon-plus/internal/config"
 	"powcon-plus/internal/ctl"
 	"powcon-plus/internal/energy"
+	"powcon-plus/internal/loc"
 	"powcon-plus/internal/notify"
 	"powcon-plus/internal/psu"
 	"powcon-plus/internal/status"
@@ -60,6 +61,8 @@ type App struct {
 	lastStore  time.Time
 	lastSave   time.Time
 	sensorLost bool
+	language   string
+	cat        *loc.Catalog
 
 	subMu sync.Mutex
 	subs  map[chan status.Snapshot]struct{}
@@ -89,6 +92,17 @@ func New(o Options) (*App, error) {
 	a.labelMode = cfg.LabelMode
 	a.alertW = cfg.AlertPowerW
 
+	// Resolve the UI language: explicit config value, then locale, then English.
+	lang := cfg.Language
+	if lang == "" {
+		lang = loc.Auto()
+	}
+	if !loc.IsValid(lang) {
+		lang = "en"
+	}
+	a.language = lang
+	a.cat = loc.Load(lang)
+
 	dir, err := psu.Detect(cfg.Sensor)
 	if err != nil {
 		return nil, err
@@ -107,7 +121,7 @@ func New(o Options) (*App, error) {
 	a.st = st
 
 	if err := a.loadHistory(); err != nil && o.Verbose {
-		a.log.Printf("storico: %v", err)
+		a.log.Printf("history: %v", err)
 	}
 	a.acc = energy.NewAccumulator(3*cfg.PollInterval.Duration, 720, 2*time.Second)
 	if days, err := st.LoadDaily(); err == nil {
@@ -141,7 +155,7 @@ func (a *App) Run(ctx context.Context) error {
 	defer func() {
 		srv.Close()
 		if a.opts.Verbose {
-			a.log.Printf("socket di controllo rimosso")
+			a.log.Printf("control socket removed")
 		}
 	}()
 	a.registerCtl(srv)
@@ -184,7 +198,7 @@ func (a *App) Stop() { a.stopOnce.Do(func() { close(a.stop) }) }
 
 func (a *App) shutdown() {
 	if err := a.persistDaily(); err != nil {
-		a.log.Printf("salvataggio riepiloghi: %v", err)
+		a.log.Printf("saving daily rollups: %v", err)
 	}
 	if a.item != nil {
 		a.item.SetStatus("Passive")
@@ -194,8 +208,8 @@ func (a *App) shutdown() {
 func (a *App) alertOnStartup() {
 	time.Sleep(2 * time.Second)
 	if _, ok := psu.Available(a.cfg.Sensor); !ok {
-		notify.Send("powcon-plus", "PSU non rilevato",
-			"Il sensore hwmon del Corsair HX non è presente: controlla il cavo USB.", 0)
+		cat := a.catNow()
+		notify.Send("powcon-plus", cat.Get("notif.psu.title"), cat.Get("notif.psu.body"), 0)
 	}
 }
 
@@ -206,7 +220,7 @@ func (a *App) collect() {
 	a.mu.Lock()
 	if err != nil {
 		if !a.sensorLost {
-			a.log.Printf("lettura sensore: %v", err)
+			a.log.Printf("sensor read: %v", err)
 			a.sensorLost = true
 		}
 		a.pausedKeepState()
@@ -215,7 +229,7 @@ func (a *App) collect() {
 		return
 	}
 	if a.sensorLost {
-		a.log.Printf("sensore di nuovo disponibile")
+		a.log.Printf("sensor available again")
 		a.sensorLost = false
 	}
 	a.last = smp
@@ -237,12 +251,12 @@ func (a *App) collect() {
 
 	if shouldStore {
 		if err := a.st.AppendSample(smp); err != nil {
-			a.log.Printf("registrazione campione: %v", err)
+			a.log.Printf("storing sample: %v", err)
 		}
 	}
 	if shouldSave {
 		if err := a.persistDaily(); err != nil {
-			a.log.Printf("riepiloghi: %v", err)
+			a.log.Printf("daily rollups: %v", err)
 		}
 	}
 	a.refreshTray(smp)
@@ -274,10 +288,11 @@ func (a *App) alertCheck(smp *psu.Sample) {
 		return
 	}
 	a.lastAlert = smp.Time
-	msg := fmt.Sprintf("Assorbio %.0f W da rete (soglia %.0f W) da %s.",
-		smp.PTot, a.alertW, formatDur(smp.Time.Sub(a.overSince)))
-	a.log.Printf("allerta: %s", msg)
-	notify.SendWithIcon("powcon-plus", "Consumo elevato", msg, "dialog-warning", 0)
+	// Called with a.mu held (see collect), so read the catalog directly.
+	cat := a.cat
+	msg := cat.Sprintf("notif.alert.body", smp.PTot, a.alertW, formatDur(smp.Time.Sub(a.overSince)))
+	a.log.Printf("alert: %s", msg)
+	notify.SendWithIcon("powcon-plus", cat.Get("notif.alert.title"), msg, "dialog-warning", 0)
 }
 
 // --- state / snapshot ---
@@ -300,7 +315,7 @@ func lastDays(d []energy.Day, n int) []energy.Day {
 	return d[:n]
 }
 
-// formatDur formats a short duration in Italian.
+// formatDur formats a short duration in compact form (e.g. "45s", "3 min", "2h07").
 func formatDur(d time.Duration) string {
 	switch {
 	case d < time.Minute:
@@ -315,9 +330,9 @@ func formatDur(d time.Duration) string {
 // --- tray ---
 
 func (a *App) runTray() {
-	item, err := tray.New(tray.Options{ID: "powcon-plus", Title: "Consumi workstation"})
+	item, err := tray.New(tray.Options{ID: "powcon-plus", Title: a.catNow().Get("tray.title")})
 	if err != nil {
-		a.log.Printf("tray non disponibile (%v): esecuzione senza icona", err)
+		a.log.Printf("tray unavailable (%v): running without icon", err)
 		return
 	}
 	if err := item.ClaimName(); err != nil {
@@ -337,15 +352,15 @@ func (a *App) runTray() {
 	for attempt := 1; ; attempt++ {
 		if err := item.Register(); err == nil {
 			if a.opts.Verbose {
-				a.log.Printf("tray registrato (tentativo %d)", attempt)
+				a.log.Printf("tray registered (attempt %d)", attempt)
 			}
 			break
 		} else if attempt < 30 {
 			if a.opts.Verbose {
-				a.log.Printf("watcher tray non pronto: %v", err)
+				a.log.Printf("watcher tray not ready: %v", err)
 			}
 		} else {
-			a.log.Printf("impossibile registrare l'icona di tray: %v", err)
+			a.log.Printf("cannot register the tray icon: %v", err)
 			break
 		}
 		select {
@@ -366,21 +381,31 @@ func (a *App) lastSample() *psu.Sample {
 	return a.last
 }
 
+// catNow returns the current translation catalog (protected by a.mu).
+func (a *App) catNow() *loc.Catalog {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.cat
+}
+
 func (a *App) refreshTray(smp *psu.Sample) {
 	if a.item == nil {
 		return
 	}
 	snap := a.snapshot()
+	cat := a.catNow()
 	label := snap.Label(a.cfg)
 	if label != a.lastLabel {
 		a.item.SetLabel(label)
 		a.lastLabel = label
 	}
 	if snap.Online {
-		a.item.SetToolTip("Consumi workstation", a.toolTipText(snap))
+		a.item.SetToolTip(cat.Get("tray.title"), cat.Sprintf("tray.tooltip",
+			snap.W, snap.TodayWh/1000, snap.TodayCostEuro, snap.TodayAvgW, snap.TodayMaxW,
+			snap.I12, snap.I5, snap.I33, snap.TVRM, snap.TCase, snap.Fan))
 	} else {
-		a.item.SetLabel("n/d")
-		a.item.SetToolTip("Consumi workstation", "Sensore PSU non disponibile")
+		a.item.SetLabel(cat.Get("tray.offline.label"))
+		a.item.SetToolTip(cat.Get("tray.title"), cat.Get("tray.offline.tooltip"))
 	}
 	switch {
 	case a.sensorLost:
@@ -390,14 +415,6 @@ func (a *App) refreshTray(smp *psu.Sample) {
 	default:
 		a.item.SetIconState(tray.StateNormal)
 	}
-}
-
-func (a *App) toolTipText(s status.Snapshot) string {
-	return fmt.Sprintf(
-		"Potenza AC: %.0f W\nOggi: %.2f kWh (%.2f €)\nMedia oggi: %.0f W · picco %.0f W\n"+
-			"+12V %.1f A · +5V %.1f A · +3.3V %.1f A\nVRM %.1f °C · case %.1f °C · ventola %.0f RPM",
-		s.W, s.TodayWh/1000, s.TodayCostEuro, s.TodayAvgW, s.TodayMaxW,
-		s.I12, s.I5, s.I33, s.TVRM, s.TCase, s.Fan)
 }
 
 func (a *App) cycleLabel() {
@@ -424,47 +441,48 @@ func (a *App) rebuildMenu() {
 	}
 	snap := a.snapshot()
 	installed, path := autostart.XDGInstalled()
+	cat := a.catNow()
 	a.item.Menu().Rebuild(func(b *tray.MenuBuilder) {
-		b.Disabled(fmt.Sprintf("%.0f W · oggi %.2f kWh", snap.W, snap.TodayWh/1000))
+		b.Disabled(cat.Sprintf("tray.menu.info", snap.W, snap.TodayWh/1000))
 		b.Separator()
-		b.Item("window", "Apri dettaglio consumi", func() { a.launchWindow() })
-		b.Item("report", "Report in terminale (notifica)", func() {
-			notify.Send("powcon-plus", "Report ultimi 7 giorni", a.reportText(7), 0)
+		b.Item("window", cat.Get("tray.menu.window"), func() { a.launchWindow() })
+		b.Item("report", cat.Get("tray.menu.report"), func() {
+			notify.Send("powcon-plus", cat.Get("tray.menu.report.title"), a.reportText(7), 0)
 		})
-		b.Check("pause", "Pausa raccolta", snap.Paused, func() { a.togglePause() })
-		b.Sub("mode", "Etichetta nella barra", func(sb *tray.MenuBuilder) {
-			sb.Radio("mode-power", "Potenza (W)", snap.LabelMode == config.ModePower,
+		b.Check("pause", cat.Get("tray.menu.pause"), snap.Paused, func() { a.togglePause() })
+		b.Sub("mode", cat.Get("tray.menu.mode"), func(sb *tray.MenuBuilder) {
+			sb.Radio("mode-power", cat.Get("tray.menu.mode.power"), snap.LabelMode == config.ModePower,
 				func() { a.setLabelMode(config.ModePower) })
-			sb.Radio("mode-energy", "Energia di oggi (Wh/kWh)", snap.LabelMode == config.ModeEnergy,
+			sb.Radio("mode-energy", cat.Get("tray.menu.mode.energy"), snap.LabelMode == config.ModeEnergy,
 				func() { a.setLabelMode(config.ModeEnergy) })
-			sb.Radio("mode-both", "Potenza + energia", snap.LabelMode == config.ModeBoth,
+			sb.Radio("mode-both", cat.Get("tray.menu.mode.both"), snap.LabelMode == config.ModeBoth,
 				func() { a.setLabelMode(config.ModeBoth) })
-			sb.Radio("mode-none", "Solo icona", snap.LabelMode == config.ModeNone,
+			sb.Radio("mode-none", cat.Get("tray.menu.mode.none"), snap.LabelMode == config.ModeNone,
 				func() { a.setLabelMode(config.ModeNone) })
 		})
-		b.Sub("alert", "Avviso consumo elevato", func(sb *tray.MenuBuilder) {
+		b.Sub("alert", cat.Get("tray.menu.alert"), func(sb *tray.MenuBuilder) {
 			for _, w := range []float64{0, 400, 600, 800, 1000} {
 				w := w
-				label := "Disattivo"
+				label := cat.Get("tray.menu.alert.off")
 				if w > 0 {
-					label = fmt.Sprintf("> %.0f W", w)
+					label = cat.Sprintf("tray.menu.alert.on", w)
 				}
 				sb.Radio(fmt.Sprintf("alert-%v", w), label, a.alertThreshold() == w, func() {
 					a.setAlert(w)
 				})
 			}
 		})
-		b.Sub("autostart", "Avvio automatico", func(sb *tray.MenuBuilder) {
-			sb.Check("as-xdg", "All'avvio della sessione (XDG)", installed, func() {
+		b.Sub("autostart", cat.Get("tray.menu.autostart"), func(sb *tray.MenuBuilder) {
+			sb.Check("as-xdg", cat.Get("tray.menu.autostart.xdg"), installed, func() {
 				if installed {
 					if _, err := autostart.RemoveXDG(); err != nil {
-						a.log.Printf("rimozione autostart: %v", err)
+						a.log.Printf("removing autostart: %v", err)
 					}
 				} else {
 					if p, err := autostart.InstallXDG("", nil); err != nil {
-						a.log.Printf("installazione autostart: %v", err)
+						a.log.Printf("installing autostart: %v", err)
 					} else {
-						a.log.Printf("autostart XDG scritto in %s", p)
+						a.log.Printf("autostart XDG written to %s", p)
 					}
 				}
 				a.rebuildMenu()
@@ -472,17 +490,18 @@ func (a *App) rebuildMenu() {
 			sb.Disabled(path)
 		})
 		b.Separator()
-		b.Item("save", "Salva configurazione", func() {
+		b.Item("save", cat.Get("tray.menu.save"), func() {
 			if err := config.Save(a.cfgPath, a.effectiveConfig()); err != nil {
-				a.log.Printf("salvataggio configurazione: %v", err)
+				a.log.Printf("saving configuration: %v", err)
 			}
 		})
-		b.Item("quit", "Esci", func() { a.Stop() })
+		b.Item("quit", cat.Get("tray.menu.quit"), func() { a.Stop() })
 	})
 }
 
 func (a *App) reportText(days int) string {
 	all := a.acc.Days()
+	cat := a.catNow()
 	var lines []string
 	total := 0.0
 	for i, d := range all {
@@ -490,19 +509,22 @@ func (a *App) reportText(days int) string {
 			break
 		}
 		total += d.Wh
-		lines = append(lines, fmt.Sprintf("%s  %6.2f kWh  %5.2f €  picco %.0f W",
-			d.Date, d.Wh/1000, d.Costo(a.cfg.EurPerKWh), d.MaxW))
+		lines = append(lines, fmt.Sprintf("%s  %6.2f kWh  %5.2f €  %s",
+			d.Date, d.Wh/1000, d.Costo(a.cfg.EurPerKWh), cat.Sprintf("tray.report.peak", d.MaxW)))
 	}
 	if len(lines) == 0 {
-		return "Nessun dato raccolto."
+		return cat.Get("tray.report.empty")
 	}
-	return fmt.Sprintf("%v\nTotale %.2f kWh (%.2f €)", lines, total/1000, total/1000*a.cfg.EurPerKWh)
+	return fmt.Sprintf("%v\n%s", lines, cat.Sprintf("tray.report.total", total/1000, total/1000*a.cfg.EurPerKWh))
 }
 
 func (a *App) effectiveConfig() config.Config {
+	a.mu.RLock()
 	c := a.cfg
 	c.LabelMode = a.labelMode
 	c.AlertPowerW = a.alertW
+	c.Language = a.language
+	a.mu.RUnlock()
 	return c
 }
 
@@ -516,7 +538,7 @@ func (a *App) togglePause() {
 	a.refreshTray(a.lastSample())
 	a.rebuildMenu()
 	if a.opts.Verbose {
-		a.log.Printf("raccolta: pausa=%v", paused)
+		a.log.Printf("collection: paused=%v", paused)
 	}
 }
 
@@ -558,7 +580,7 @@ func (a *App) launchWindow() {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdout, cmd.Stderr = nil, nil
 	if err := cmd.Start(); err != nil {
-		a.log.Printf("apertura finestra: %v", err)
+		a.log.Printf("opening window: %v", err)
 	}
 }
 
@@ -649,7 +671,7 @@ func (a *App) registerCtl(s *ctl.Server) {
 	s.Handle("label-mode", func(args map[string]any) (any, error) {
 		m, _ := args["mode"].(string)
 		if m == "" {
-			return nil, errors.New("argomento mode mancante")
+			return nil, errors.New("missing mode argument")
 		}
 		a.setLabelMode(config.LabelMode(m))
 		return map[string]any{"label_mode": m}, nil
@@ -663,7 +685,7 @@ func (a *App) registerCtl(s *ctl.Server) {
 				if t == "off" {
 					a.setAlert(0)
 				} else {
-					return nil, errors.New("w deve essere un numero o \"off\"")
+					return nil, errors.New("w must be a number or \"off\"")
 				}
 			}
 		}
@@ -680,6 +702,22 @@ func (a *App) registerCtl(s *ctl.Server) {
 	s.Handle("config", func(map[string]any) (any, error) { return a.effectiveConfig(), nil })
 	s.Handle("save-config", func(map[string]any) (any, error) {
 		return nil, config.Save(a.cfgPath, a.effectiveConfig())
+	})
+	s.Handle("ui-language", func(args map[string]any) (any, error) {
+		lang, _ := args["language"].(string)
+		if !loc.IsValid(lang) {
+			return nil, fmt.Errorf("language %q is not supported (it|en|de|fr|es|zh|ja)", lang)
+		}
+		a.mu.Lock()
+		a.language = lang
+		a.cat = loc.Load(lang)
+		a.mu.Unlock()
+		if err := config.Save(a.cfgPath, a.effectiveConfig()); err != nil {
+			a.log.Printf("saving configuration: %v", err)
+		}
+		a.refreshTray(a.lastSample())
+		a.rebuildMenu()
+		return map[string]any{"language": lang}, nil
 	})
 
 	// Autostart is toggled from the UI (window checkbox / tray menu item);

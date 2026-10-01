@@ -48,7 +48,7 @@ func NewServer(path string) (*Server, error) {
 		c, derr := net.DialTimeout("unix", path, 300*time.Millisecond)
 		if derr == nil {
 			c.Close()
-			return nil, fmt.Errorf("socket %s già in uso", path)
+			return nil, fmt.Errorf("socket %s already in use", path)
 		}
 		os.Remove(path)
 	}
@@ -114,7 +114,7 @@ func (s *Server) serveConn(c net.Conn) {
 		}
 		var req Request
 		if err := json.Unmarshal(line, &req); err != nil {
-			writeResp(c, Response{OK: false, Err: "richiesta non valida: " + err.Error()})
+			writeResp(c, Response{OK: false, Err: "invalid request: " + err.Error()})
 			continue
 		}
 		if h, ok := s.streams[req.Cmd]; ok {
@@ -130,7 +130,7 @@ func (s *Server) serveConn(c net.Conn) {
 		}
 		h, ok := s.commands[req.Cmd]
 		if !ok {
-			writeResp(c, Response{OK: false, Err: "comando sconosciuto: " + req.Cmd})
+			writeResp(c, Response{OK: false, Err: "unknown command: " + req.Cmd})
 			continue
 		}
 		data, err := h(req.Args)
@@ -140,7 +140,7 @@ func (s *Server) serveConn(c net.Conn) {
 		}
 		raw, err := json.Marshal(data)
 		if err != nil {
-			writeResp(c, Response{OK: false, Err: "serializzazione: " + err.Error()})
+			writeResp(c, Response{OK: false, Err: "serialization: " + err.Error()})
 			continue
 		}
 		writeResp(c, Response{OK: true, Data: raw})
@@ -156,7 +156,7 @@ func writeResp(c net.Conn, r Response) {
 func Call(path string, req Request) (Response, error) {
 	c, err := net.DialTimeout("unix", path, 2*time.Second)
 	if err != nil {
-		return Response{}, fmt.Errorf("daemon non in esecuzione (%s): %w", path, err)
+		return Response{}, fmt.Errorf("daemon not running (%s): %w", path, err)
 	}
 	defer c.Close()
 	b, err := json.Marshal(req)
@@ -169,7 +169,7 @@ func Call(path string, req Request) (Response, error) {
 	c.SetReadDeadline(time.Now().Add(5 * time.Second))
 	sc := bufio.NewScanner(c)
 	if !sc.Scan() {
-		return Response{}, errors.New("nessuna risposta dal daemon")
+		return Response{}, errors.New("no response from the daemon")
 	}
 	var resp Response
 	if err := json.Unmarshal(sc.Bytes(), &resp); err != nil {
@@ -182,7 +182,7 @@ func Call(path string, req Request) (Response, error) {
 func Subscribe(path string, req Request) (net.Conn, *bufio.Reader, error) {
 	c, err := net.DialTimeout("unix", path, 2*time.Second)
 	if err != nil {
-		return nil, nil, fmt.Errorf("daemon non in esecuzione (%s): %w", path, err)
+		return nil, nil, fmt.Errorf("daemon not running (%s): %w", path, err)
 	}
 	b, err := json.Marshal(req)
 	if err != nil {

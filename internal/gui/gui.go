@@ -3,6 +3,11 @@
 // ("subscribe" command, one JSON snapshot every second). Without a daemon it
 // falls back to reading the hwmon sensor directly with a local accumulator,
 // so it stays usable even with the daemon off.
+//
+// The window is localized: the language comes from the configuration
+// ("language"), then from the locale, then from English. It can be switched
+// live from the "language" select, which persists the choice through the
+// daemon (or directly to the configuration when the daemon is down).
 package gui
 
 import (
@@ -31,6 +36,7 @@ import (
 	"powcon-plus/internal/config"
 	"powcon-plus/internal/ctl"
 	"powcon-plus/internal/energy"
+	"powcon-plus/internal/loc"
 	"powcon-plus/internal/psu"
 	"powcon-plus/internal/status"
 )
@@ -42,12 +48,18 @@ type Options struct {
 }
 
 const (
-	windowTitle = "powcon-plus — consumi workstation"
 	chartSpan   = 30 * time.Minute // time window of the live chart
 	chartMaxSeg = 240              // cap on the segments drawn
 	tableDays   = 14               // days in the table
 	sockName    = "control.sock"
 )
+
+// modeKeys are the raw label modes on the wire; the select shows the
+// translated labels in the same order.
+var modeKeys = []string{
+	string(config.ModePower), string(config.ModeEnergy),
+	string(config.ModeBoth), string(config.ModeNone),
+}
 
 // Run opens the window and returns when it is closed.
 func Run(o Options) error {
@@ -60,8 +72,9 @@ func Run(o Options) error {
 		dataDir = cfg.DataDir
 	}
 	a := app.NewWithID("plus.powcon.window")
-	w := a.NewWindow(windowTitle)
+	w := a.NewWindow("")
 	u := newUI(a, w, cfg, filepath.Join(dataDir, sockName))
+	w.SetTitle(u.cat.Get("ui.window.title"))
 	w.SetContent(u.root)
 	w.Resize(fyne.NewSize(760, 560))
 	w.SetOnClosed(u.stop)
@@ -79,21 +92,34 @@ type windowUI struct {
 	cfg  config.Config
 	sock string
 
-	root      *fyne.Container
-	power     *widget.Label
-	summary   *widget.Label
-	daemon    *widget.Label
-	chart     *powerChart
-	cells     map[string]*widget.Label
-	table     *widget.Table
-	pauseBtn  *widget.Button
-	modeSel   *widget.Select
-	autostart *widget.Check
+	cat      *loc.Catalog
+	langCode string
+
+	root         *fyne.Container
+	power        *widget.Label
+	summary      *widget.Label
+	daemon       *widget.Label
+	chart        *powerChart
+	cells        map[string]*widget.Label
+	gridCaps     map[string]*widget.Label
+	table        *widget.Table
+	pauseBtn     *widget.Button
+	modeSel      *widget.Select
+	langSel      *widget.Select
+	autostart    *widget.Check
+	labelCaption *widget.Label
+	langCaption  *widget.Label
+	reportBtn    *widget.Button
+	quitBtn      *widget.Button
 
 	days        []energy.Day
 	localSeries []energy.Sample // used when the snapshot carries no history
+	lastSnap    status.Snapshot
+	haveSnap    bool
+	lastMode    config.LabelMode
 	paused      bool
 	syncingMode bool // avoids a loop when syncing the Select from the snapshot
+	syncingLang bool // avoids a loop when syncing the language select
 	autoSync    bool // avoids a loop when syncing the autostart checkbox
 	autoOn      bool // last known autostart state
 
@@ -103,26 +129,56 @@ type windowUI struct {
 
 func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI {
 	u := &windowUI{app: a, win: w, cfg: cfg, sock: sock}
+
+	// Language resolution: explicit config, then locale, then English.
+	lang := cfg.Language
+	if lang == "" {
+		lang = loc.Auto()
+	}
+	if !loc.IsValid(lang) {
+		lang = "en"
+	}
+	u.langCode = lang
+	u.cat = loc.Load(lang)
+
 	u.cells = map[string]*widget.Label{}
 	for _, k := range []string{"vin", "v12", "v5", "v33", "i12", "i5", "i33",
 		"p12", "p5", "p33", "tvrm", "tcase", "fan"} {
 		u.cells[k] = widget.NewLabel("—")
 	}
+	u.gridCaps = map[string]*widget.Label{}
+	for _, k := range []string{"voltage", "current", "power", "vin", "tvrm", "tcase", "fan"} {
+		u.gridCaps[k] = caption(u.cat.Get("ui.grid." + k))
+	}
 
 	// command bar
-	u.pauseBtn = widget.NewButton("Pausa", u.togglePause)
-	u.modeSel = widget.NewSelect([]string{"power", "energy", "both", "none"}, u.setMode)
+	u.pauseBtn = widget.NewButton(u.cat.Get("ui.pause"), u.togglePause)
+	u.lastMode = cfg.LabelMode
+	u.modeSel = widget.NewSelect(u.modeOptions(), u.setMode)
 	u.syncingMode = true // initialization must not command the daemon
-	u.modeSel.SetSelected(string(cfg.LabelMode))
+	u.modeSel.SetSelected(u.cat.Get("ui.mode." + string(cfg.LabelMode)))
 	u.syncingMode = false
-	reportBtn := widget.NewButton("Report", u.showReport)
-	quitBtn := widget.NewButton("Esci", func() { u.win.Close() })
-	u.autostart = widget.NewCheck("Avvio automatico", u.toggleAutostart)
+
+	// language select (options are the native language names)
+	langNames := make([]string, len(loc.Tags))
+	for i, tag := range loc.Tags {
+		langNames[i] = tag.Name
+	}
+	u.langSel = widget.NewSelect(langNames, u.setLang)
+	u.syncingLang = true
+	u.langSel.SetSelected(loc.NameOf(u.langCode))
+	u.syncingLang = false
+
+	u.reportBtn = widget.NewButton(u.cat.Get("ui.bar.report"), u.showReport)
+	u.quitBtn = widget.NewButton(u.cat.Get("ui.bar.quit"), func() { u.win.Close() })
+	u.autostart = widget.NewCheck(u.cat.Get("ui.bar.autostart"), u.toggleAutostart)
 	u.autoSync = true // initial sync does not command the daemon
 	u.autostart.SetChecked(false)
 	u.autoSync = false
-	bar := container.NewHBox(u.pauseBtn, caption("etichetta:"), u.modeSel,
-		u.autostart, reportBtn, quitBtn)
+	u.labelCaption = caption(u.cat.Get("ui.bar.label"))
+	u.langCaption = caption(u.cat.Get("ui.bar.language"))
+	bar := container.NewHBox(u.pauseBtn, u.labelCaption, u.modeSel,
+		u.autostart, u.langCaption, u.langSel, u.reportBtn, u.quitBtn)
 
 	// daemon status display (on the right in the header)
 	u.daemon = caption("…")
@@ -131,36 +187,44 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 	u.power = widget.NewLabel("—")
 	u.power.SizeName = theme.SizeNameHeadingText
 	u.power.Importance = widget.HighImportance
-	u.summary = caption("in attesa di dati…")
+	u.summary = caption(u.cat.Get("ui.header.waiting"))
 	header := container.NewBorder(nil, nil, nil, u.daemon,
 		container.NewVBox(u.power, u.summary))
 
 	// live chart
 	u.chart = newPowerChart()
+	u.chart.SetCatalog(u.cat)
 
 	// rails grid +12V / +5V / +3.3V
 	railGrid := container.NewGridWithColumns(4,
 		caption(""), caption("+12 V"), caption("+5 V"), caption("+3.3 V"),
-		caption("tensione (V)"), u.cells["v12"], u.cells["v5"], u.cells["v33"],
-		caption("corrente (A)"), u.cells["i12"], u.cells["i5"], u.cells["i33"],
-		caption("potenza (W)"), u.cells["p12"], u.cells["p5"], u.cells["p33"])
+		u.gridCaps["voltage"], u.cells["v12"], u.cells["v5"], u.cells["v33"],
+		u.gridCaps["current"], u.cells["i12"], u.cells["i5"], u.cells["i33"],
+		u.gridCaps["power"], u.cells["p12"], u.cells["p5"], u.cells["p33"])
 
 	// AC input, temperatures, fan
 	envGrid := container.NewGridWithColumns(4,
-		caption("ingresso (V AC)"), caption("VRM (°C)"), caption("case (°C)"),
-		caption("ventola RPM · PWM %"),
+		u.gridCaps["vin"], u.gridCaps["tvrm"], u.gridCaps["tcase"], u.gridCaps["fan"],
 		u.cells["vin"], u.cells["tvrm"], u.cells["tcase"], u.cells["fan"])
 
-	// last days table
+	// last days table (row 0 is the header)
+	colKeys := []string{"date", "kwh", "euro", "avg", "peak"}
 	u.table = widget.NewTable(
-		func() (int, int) { return len(u.days), 5 },
+		func() (int, int) { return len(u.days) + 1, len(colKeys) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
 		func(id widget.TableCellID, o fyne.CanvasObject) {
 			l, ok := o.(*widget.Label)
-			if !ok || id.Row >= len(u.days) {
+			if !ok {
 				return
 			}
-			d := u.days[id.Row]
+			if id.Row == 0 {
+				l.SetText(u.cat.Get("ui.table." + colKeys[id.Col]))
+				return
+			}
+			if id.Row-1 >= len(u.days) {
+				return
+			}
+			d := u.days[id.Row-1]
 			switch id.Col {
 			case 0:
 				l.SetText(d.Date)
@@ -184,10 +248,54 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 	return u
 }
 
+// modeOptions returns the translated mode labels, in modeKeys order.
+func (u *windowUI) modeOptions() []string {
+	opts := make([]string, len(modeKeys))
+	for i, k := range modeKeys {
+		opts[i] = u.cat.Get("ui.mode." + k)
+	}
+	return opts
+}
+
 func caption(text string) *widget.Label {
 	l := widget.NewLabel(text)
 	l.Importance = widget.LowImportance
 	return l
+}
+
+// retranslate re-renders every static label with the current catalog. It
+// runs from the UI thread (the language select callback).
+func (u *windowUI) retranslate() {
+	u.win.SetTitle(u.cat.Get("ui.window.title"))
+	u.labelCaption.SetText(u.cat.Get("ui.bar.label"))
+	u.langCaption.SetText(u.cat.Get("ui.bar.language"))
+	u.reportBtn.SetText(u.cat.Get("ui.bar.report"))
+	u.quitBtn.SetText(u.cat.Get("ui.bar.quit"))
+	u.autostart.SetText(u.cat.Get("ui.bar.autostart"))
+	if u.paused {
+		u.pauseBtn.SetText(u.cat.Get("ui.resume"))
+	} else {
+		u.pauseBtn.SetText(u.cat.Get("ui.pause"))
+	}
+	u.syncingMode = true
+	u.modeSel.Options = u.modeOptions()
+	u.modeSel.SetSelected(u.cat.Get("ui.mode." + string(u.lastMode)))
+	u.syncingMode = false
+	u.modeSel.Refresh()
+	for key, l := range u.gridCaps {
+		l.SetText(u.cat.Get("ui.grid." + key))
+	}
+	u.chart.SetCatalog(u.cat)
+	if u.haveSnap {
+		u.summary.SetText(u.cat.Sprintf("ui.summary.today",
+			u.lastSnap.TodayWh/1000, u.lastSnap.TodayCostEuro, u.lastSnap.TodayAvgW, u.lastSnap.TodayMaxW))
+	} else {
+		u.summary.SetText(u.cat.Get("ui.header.waiting"))
+	}
+	u.table.Refresh()
+	u.syncingLang = true
+	u.langSel.SetSelected(loc.NameOf(u.langCode))
+	u.syncingLang = false
 }
 
 // --- UI updates (from the UI thread only) ---
@@ -207,9 +315,11 @@ func (u *windowUI) apply(s status.Snapshot) {
 
 func (u *windowUI) render(s status.Snapshot) {
 	u.paused = s.Paused
+	u.lastSnap = s
+	u.haveSnap = true
+	u.lastMode = s.LabelMode
 	u.power.SetText(s.WLabel(u.cfg.FormatW))
-	u.summary.SetText(fmt.Sprintf(
-		"oggi %.2f kWh (%.2f €) · media %.0f W · picco %.0f W",
+	u.summary.SetText(u.cat.Sprintf("ui.summary.today",
 		s.TodayWh/1000, s.TodayCostEuro, s.TodayAvgW, s.TodayMaxW))
 
 	val := func(v float64, format string) string {
@@ -238,14 +348,15 @@ func (u *windowUI) render(s status.Snapshot) {
 	}
 	u.table.Refresh()
 
-	label := "Pausa"
+	label := u.cat.Get("ui.pause")
 	if s.Paused {
-		label = "Riprendi"
+		label = u.cat.Get("ui.resume")
 	}
 	u.pauseBtn.SetText(label)
-	if u.modeSel.Selected != string(s.LabelMode) {
+	want := u.cat.Get("ui.mode." + string(s.LabelMode))
+	if u.modeSel.Selected != want {
 		u.syncingMode = true
-		u.modeSel.SetSelected(string(s.LabelMode))
+		u.modeSel.SetSelected(want)
 		u.syncingMode = false
 	}
 	u.chart.SetSeries(u.serieFrom(s), s.AlertW)
@@ -286,21 +397,56 @@ func (u *windowUI) togglePause() {
 		// the stream will confirm the state; update the button right away
 		fyne.Do(func() {
 			if cmd == "pause" {
-				u.pauseBtn.SetText("Riprendi")
+				u.pauseBtn.SetText(u.cat.Get("ui.resume"))
 			} else {
-				u.pauseBtn.SetText("Pausa")
+				u.pauseBtn.SetText(u.cat.Get("ui.pause"))
 			}
 		})
 	}()
 }
 
-func (u *windowUI) setMode(mode string) {
+// setMode sends the label mode to the daemon. The select shows translated
+// labels, so the raw key is resolved by position.
+func (u *windowUI) setMode(_ string) {
 	if u.syncingMode {
 		return
 	}
+	idx := u.modeSel.SelectedIndex()
+	if idx < 0 || idx >= len(modeKeys) {
+		return
+	}
+	mode := modeKeys[idx]
 	sock := u.sock
 	go func() {
 		ctl.Call(sock, ctl.Request{Cmd: "label-mode", Args: map[string]any{"mode": mode}})
+	}()
+}
+
+// setLang switches the UI language (window now, tray/notifications through
+// the daemon) and persists the choice in the configuration.
+func (u *windowUI) setLang(name string) {
+	if u.syncingLang {
+		return
+	}
+	code := loc.CodeOf(name)
+	if code == "" || code == u.langCode {
+		return
+	}
+	u.langCode = code
+	u.cat = loc.Load(code)
+	u.retranslate()
+	go func() {
+		if u.sockUp() {
+			ctl.Call(u.sock, ctl.Request{Cmd: "ui-language", Args: map[string]any{"language": code}})
+			return
+		}
+		// no daemon: persist the choice directly
+		cfg, err := config.Load("")
+		if err != nil {
+			return
+		}
+		cfg.Language = code
+		_ = config.Save(config.Path(), cfg)
 	}()
 }
 
@@ -366,18 +512,21 @@ func (u *windowUI) toggleAutostart(v bool) {
 func (u *windowUI) showReport() {
 	var b strings.Builder
 	if len(u.days) == 0 {
-		b.WriteString("nessun dato giornaliero disponibile.")
+		b.WriteString(u.cat.Get("ui.report.empty"))
 	} else {
-		fmt.Fprintf(&b, "%-10s %8s %8s %7s %7s\n", "data", "kWh", "€", "media", "picco")
+		fmt.Fprintf(&b, "%-10s %8s %8s %7s %7s\n",
+			u.cat.Get("ui.table.date"), u.cat.Get("ui.table.kwh"), u.cat.Get("ui.table.euro"),
+			u.cat.Get("ui.table.avg"), u.cat.Get("ui.table.peak"))
 		var tot float64
 		for _, d := range u.days {
 			tot += d.Wh
 			fmt.Fprintf(&b, "%-10s %8.3f %8.2f %7.0f %7.0f\n",
 				d.Date, d.Wh/1000, d.Costo(u.cfg.EurPerKWh), d.AvgW(), d.MaxW)
 		}
-		fmt.Fprintf(&b, "%-10s %8.3f %8.2f\n", "TOTALE", tot/1000, tot/1000*u.cfg.EurPerKWh)
+		fmt.Fprintf(&b, "%-10s %8.3f %8.2f\n",
+			u.cat.Get("ui.report.total"), tot/1000, tot/1000*u.cfg.EurPerKWh)
 	}
-	dialog.ShowInformation("Report giorni", b.String(), u.win)
+	dialog.ShowInformation(u.cat.Get("ui.report.title"), b.String(), u.win)
 }
 
 // --- data feed (goroutine) ---
@@ -461,7 +610,7 @@ func (u *windowUI) pumpLocal() {
 					rd = r2
 				}
 			} else if !noteShown {
-				u.setStatusLine(false, "sensore non disponibile")
+				u.setStatusLine(false, u.cat.Get("ui.status.sensor"))
 				noteShown = true
 			}
 		}
@@ -499,9 +648,9 @@ func (u *windowUI) sleep(d time.Duration) bool {
 }
 
 func (u *windowUI) setStatusLine(active bool, note string) {
-	txt := "senza daemon (lettura diretta)"
+	txt := u.cat.Get("ui.status.nodaemon")
 	if active {
-		txt = "daemon: attivo"
+		txt = u.cat.Get("ui.status.daemon")
 	}
 	if note != "" {
 		txt += " · " + note
@@ -545,12 +694,21 @@ type powerChart struct {
 	series []energy.Sample
 	alertW float64
 	span   time.Duration
+	cat    *loc.Catalog
 }
 
 func newPowerChart() *powerChart {
-	c := &powerChart{span: chartSpan}
+	c := &powerChart{span: chartSpan, cat: loc.Load("en")}
 	c.ExtendBaseWidget(c)
 	return c
+}
+
+// SetCatalog swaps the translation catalog of the chart texts.
+func (c *powerChart) SetCatalog(cat *loc.Catalog) {
+	if cat != nil {
+		c.cat = cat
+		c.Refresh()
+	}
 }
 
 // SetSeries replaces the displayed series (from the UI thread).
@@ -602,10 +760,10 @@ func newChartRenderer(c *powerChart) *chartRenderer {
 		axisY: canvas.NewLine(theme.Color(theme.ColorNameSeparator)),
 		alert: canvas.NewLine(theme.Color(theme.ColorNameError)),
 		tMax:  newChartText("", muted),
-		tZero: newChartText("0 W", muted),
-		tOld:  newChartText("−30 min", muted),
-		tNow:  newChartText("adesso", muted),
-		tNone: newChartText("in attesa di campioni…", muted),
+		tZero: newChartText("", muted),
+		tOld:  newChartText("", muted),
+		tNow:  newChartText("", muted),
+		tNone: newChartText("", muted),
 	}
 	return r
 }
@@ -728,14 +886,16 @@ func (r *chartRenderer) Layout(size fyne.Size) {
 	// texts
 	r.tMax.Text = fmt.Sprintf("%.0f W", maxW)
 	r.tMax.Move(fyne.NewPos(4, 0))
+	r.tZero.Text = c.cat.Get("ui.chart.zero")
 	r.tZero.Move(fyne.NewPos(4, h-padB+1))
+	r.tOld.Text = c.cat.Get("ui.chart.old")
 	r.tOld.Move(fyne.NewPos(padL, h-padB+1))
-	r.tNow.Text = "adesso"
+	r.tNow.Text = c.cat.Get("ui.chart.now")
 	r.tNow.Resize(fyne.NewSize(padR+80, 14))
 	r.tNow.Move(fyne.NewPos(w-padR-80, h-padB+1))
 	r.tNow.Alignment = fyne.TextAlignTrailing
 	if len(pts) == 0 {
-		r.tNone.Text = "in attesa di campioni…"
+		r.tNone.Text = c.cat.Get("ui.chart.waiting")
 		r.tNone.Move(fyne.NewPos(w/2-80, h/2-8))
 	} else {
 		r.tNone.Text = ""

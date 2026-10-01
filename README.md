@@ -109,7 +109,13 @@ alert_sustain = "15s"
 sample_interval = "10s"     # ogni quanto salvare un campione
 retention_days = 31         # giorni di campioni crudi da tenere
 sensor = ""                 # vuoto = auto-detect; es. "hwmon8" per forzare
+language = ""               # it | en | de | fr | es | zh | ja; vuoto = dalla locale
 ```
+
+La lingua riguarda finestra, menu di tray e notifiche: se il campo è vuoto
+viene rilevata dalla locale del sistema (fallback inglese), e può essere
+cambiata in tempo reale dalla select **Lingua** nella finestra (la scelta
+viene salvata nella configurazione).
 
 Modalità etichetta: `both` mostra ad esempio `148 W · 2.41 kWh`,
 `energy` sotto 1 kWh mostra i Wh (`340 Wh`).

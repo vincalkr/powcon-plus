@@ -38,8 +38,15 @@ const version = "0.1.0"
 func main() {
 	args := os.Args[1:]
 	cmd := "run"
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		cmd, args = args[0], args[1:]
+	if len(args) > 0 {
+		switch args[0] {
+		case "-h", "--help", "help":
+			usage(os.Stdout)
+			return
+		}
+		if !strings.HasPrefix(args[0], "-") {
+			cmd, args = args[0], args[1:]
+		}
 	}
 	var err error
 	switch cmd {
@@ -67,44 +74,46 @@ func main() {
 		err = cmdInitConfig(args)
 	case "version", "--version":
 		fmt.Printf("powcon-plus %s\n", version)
-	case "help", "-h", "--help":
-		usage(os.Stdout)
 	default:
-		fmt.Fprintf(os.Stderr, "comando sconosciuto: %s\n\n", cmd)
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", cmd)
 		usage(os.Stderr)
 		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "errore: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func usage(w *os.File) {
-	fmt.Fprint(w, `powcon-plus — consumi della workstation dal PSU Corsair (hx1200i)
+	fmt.Fprint(w, `powcon-plus — workstation power/energy monitor (Corsair HX1200i PSU)
 
-Uso:
-  powcon-plus run [flag]            avvia il daemon con icona di tray
-  powcon-plus status [--json]       lettura istantanea (usa il daemon se attivo)
+Usage:
+  powcon-plus run [flags]            start the daemon with a tray icon (default)
+  powcon-plus status [--json]        one-shot reading (uses the daemon when up)
   powcon-plus report [--days N] [--csv]
-                                    kWh/costo per giorno
-  powcon-plus window                finestra di dettaglio (build -tags gui)
-  powcon-plus ctl <cmd> [k=v...]    controlla il daemon (status|pause|resume|label-mode|alert|autostart-set enabled=1|quit)
-  powcon-plus sensors               elenca i canali hwmon del PSU rilevati
+                                     per-day kWh/cost summary
+  powcon-plus window                 detail window (gui-tagged build)
+  powcon-plus ctl <cmd> [k=v...]     control the daemon
+                                      (status|pause|resume|label-mode|alert|ui-language|autostart-status|autostart-set enabled=1|quit)
+  powcon-plus sensors                list the detected PSU hwmon channels
   powcon-plus install-autostart [--mode xdg|systemd]
   powcon-plus uninstall-autostart
-  powcon-plus uninstall [--purge]
+  powcon-plus uninstall [--purge]    stop the daemon, remove autostart and binaries;
+                                      --purge also removes data and configuration
   powcon-plus autostart-status
-  powcon-plus init-config           scrive ~/.config/powcon-plus/config.toml
+  powcon-plus init-config            write ~/.config/powcon-plus/config.toml
+  powcon-plus version                print the version
+  powcon-plus help                   show this help
 
-Flag comuni:
-  --config PATH      file di configurazione (default ~/.config/powcon-plus/config.toml)
-  --no-tray          non creare l'icona di tray
-  --no-store         non scrivere campioni su disco
-  --verbose          log dettagliato
+Common flags:
+  --config PATH      configuration file (default ~/.config/powcon-plus/config.toml)
+  --no-tray          do not create the tray icon
+  --no-store         do not write samples to disk
+  --verbose          detailed logging
 
-File:
-  ~/.config/powcon-plus/config.toml   configurazione
+Files:
+  ~/.config/powcon-plus/config.toml   configuration
   ~/.local/share/powcon-plus/         daily.json, samples-*.jsonl, control.sock
 `)
 }
@@ -119,10 +128,10 @@ type runFlags struct {
 func parseRunFlags(name string, args []string) (runFlags, error) {
 	var f runFlags
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.StringVar(&f.config, "config", "", "file di configurazione")
-	fs.BoolVar(&f.noTray, "no-tray", false, "nessuna icona di tray")
-	fs.BoolVar(&f.noStore, "no-store", false, "nessuna scrittura di campioni")
-	fs.BoolVar(&f.verbose, "verbose", false, "log dettagliato")
+	fs.StringVar(&f.config, "config", "", "configuration file")
+	fs.BoolVar(&f.noTray, "no-tray", false, "no tray icon")
+	fs.BoolVar(&f.noStore, "no-store", false, "do not write samples to disk")
+	fs.BoolVar(&f.verbose, "verbose", false, "detailed logging")
 	if err := fs.Parse(args); err != nil {
 		return f, err
 	}
@@ -150,7 +159,7 @@ func cmdRun(args []string) error {
 
 func cmdStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
-	configPath := fs.String("config", "", "file di configurazione")
+	configPath := fs.String("config", "", "configuration file")
 	jsonOut := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -203,28 +212,28 @@ func printSnapshot(s status.Snapshot, cfg config.Config, asJSON bool) {
 		enc.Encode(s)
 		return
 	}
-	fmt.Printf("sensore:      %s (%s)\n", s.Sensor, map[bool]string{true: "attivo", false: "NON attivo"}[s.Online])
-	fmt.Printf("potenza AC:   %6.1f W   [%s]\n", s.W, s.Label(cfg))
-	fmt.Printf("ingresso:     %6.1f V AC\n", s.VIn)
+	fmt.Printf("sensor:       %s (%s)\n", s.Sensor, map[bool]string{true: "online", false: "OFFLINE"}[s.Online])
+	fmt.Printf("AC power:     %6.1f W   [%s]\n", s.W, s.Label(cfg))
+	fmt.Printf("input:        %6.1f V AC\n", s.VIn)
 	fmt.Printf("+12V:         %6.2f V  %6.2f A  %6.1f W\n", s.V12, s.I12, s.P12)
 	fmt.Printf("+5V:          %6.2f V  %6.2f A  %6.1f W\n", s.V5, s.I5, s.P5)
 	fmt.Printf("+3.3V:        %6.2f V  %6.2f A  %6.1f W\n", s.V33, s.I33, s.P33)
-	fmt.Printf("temperature:  VRM %.1f °C   case %.1f °C   ventola %.0f RPM (%.0f%%)\n",
+	fmt.Printf("temperatures: VRM %.1f °C   case %.1f °C   fan %.0f RPM (%.0f%%)\n",
 		s.TVRM, s.TCase, s.Fan, s.PWM)
 	if s.SessionSeconds > 0 {
-		fmt.Printf("sessione:     %.2f kWh in %s (media %.0f W, picco %.0f W)\n",
+		fmt.Printf("session:      %.2f kWh in %s (avg %.0f W, peak %.0f W)\n",
 			s.SessionWh/1000, fmtDur(s.SessionSeconds), s.SessionAvgW, s.SessionMaxW)
 	}
 	if s.TodaySamples > 0 {
-		fmt.Printf("oggi:         %.2f kWh  (%.2f €)  media %.0f W  picco %.0f W  min %.0f W\n",
+		fmt.Printf("today:        %.2f kWh  (%.2f €)  avg %.0f W  peak %.0f W  min %.0f W\n",
 			s.TodayWh/1000, s.TodayCostEuro, s.TodayAvgW, s.TodayMaxW, s.TodayMinW)
 	}
 }
 
 func cmdReport(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
-	configPath := fs.String("config", "", "file di configurazione")
-	days := fs.Int("days", 14, "giorni da mostrare")
+	configPath := fs.String("config", "", "configuration file")
+	days := fs.Int("days", 14, "days to show")
 	asCSV := fs.Bool("csv", false, "output CSV")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -242,7 +251,7 @@ func cmdReport(args []string) error {
 		return err
 	}
 	if len(all) == 0 {
-		fmt.Println("nessun dato: avvia `powcon-plus run` per raccogliere campioni.")
+		fmt.Println("no data: run `powcon-plus run` to collect samples.")
 		return nil
 	}
 	if len(all) > *days {
@@ -250,7 +259,7 @@ func cmdReport(args []string) error {
 	}
 	w := csv.NewWriter(os.Stdout)
 	if *asCSV {
-		w.Write([]string{"data", "kwh", "euro", "media_w", "picco_w", "min_w", "campioni"})
+		w.Write([]string{"date", "kwh", "euro", "avg_w", "peak_w", "min_w", "samples"})
 		for _, d := range all {
 			w.Write([]string{d.Date, fmt.Sprintf("%.3f", d.Wh/1000),
 				fmt.Sprintf("%.3f", d.Costo(cfg.EurPerKWh)), fmt.Sprintf("%.0f", d.AvgW()),
@@ -260,19 +269,19 @@ func cmdReport(args []string) error {
 		return w.Error()
 	}
 	var tot float64
-	fmt.Printf("%-12s %9s %9s %9s %9s %9s %9s\n", "data", "kWh", "€", "media W", "picco W", "min W", "campioni")
+	fmt.Printf("%-12s %9s %9s %9s %9s %9s %9s\n", "date", "kWh", "€", "avg W", "peak W", "min W", "samples")
 	for _, d := range all {
 		tot += d.Wh
 		fmt.Printf("%-12s %9.3f %9.3f %9.0f %9.0f %9.0f %9d\n",
 			d.Date, d.Wh/1000, d.Costo(cfg.EurPerKWh), d.AvgW(), d.MaxW, d.MinW, d.Samples)
 	}
-	fmt.Printf("%-12s %9.3f %9.3f\n", "TOTALE", tot/1000, tot/1000*cfg.EurPerKWh)
+	fmt.Printf("%-12s %9.3f %9.3f\n", "TOTAL", tot/1000, tot/1000*cfg.EurPerKWh)
 	return nil
 }
 
 func cmdSensors(args []string) error {
 	fs := flag.NewFlagSet("sensors", flag.ContinueOnError)
-	configPath := fs.String("config", "", "file di configurazione")
+	configPath := fs.String("config", "", "configuration file")
 	jsonOut := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -308,7 +317,7 @@ func cmdSensors(args []string) error {
 
 func cmdCtl(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("uso: powcon-plus ctl <cmd> [k=v ...] (status|pause|resume|label-mode|alert|autostart-status|autostart-set enabled=1|quit)")
+		return fmt.Errorf("usage: powcon-plus ctl <cmd> [k=v ...] (status|pause|resume|label-mode|alert|ui-language|autostart-status|autostart-set enabled=1|quit)")
 	}
 	cfg, err := config.Load("")
 	if err != nil {
@@ -318,7 +327,7 @@ func cmdCtl(args []string) error {
 	for _, kv := range args[1:] {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok {
-			return fmt.Errorf("argomento %q: atteso chiave=valore", kv)
+			return fmt.Errorf("argument %q: expected key=value", kv)
 		}
 		if n, err := strconv.ParseFloat(v, 64); err == nil {
 			req.Args[k] = n
@@ -342,7 +351,7 @@ func cmdCtl(args []string) error {
 func cmdInstallAutostart(args []string) error {
 	fs := flag.NewFlagSet("install-autostart", flag.ContinueOnError)
 	mode := fs.String("mode", "xdg", "xdg | systemd")
-	execPath := fs.String("exec", "", "eseguibile da lanciare (default: quello corrente)")
+	execPath := fs.String("exec", "", "executable to run (default: the current one)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -353,23 +362,23 @@ func cmdInstallAutostart(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("scritto:", p)
-		fmt.Println("Attivo dal prossimo accesso grafico (o con logout/login).")
+		fmt.Println("written:", p)
+		fmt.Println("Active from the next graphical login (or after logout/login).")
 	case "systemd":
 		p, err := autostart.InstallSystemd(exe, nil)
 		if err != nil {
 			return err
 		}
-		fmt.Println("scritto:", p)
+		fmt.Println("written:", p)
 		if err := autostart.SystemctlUser("daemon-reload"); err != nil {
 			return err
 		}
 		if err := autostart.SystemctlUser("enable", "powcon-plus.service"); err != nil {
 			return err
 		}
-		fmt.Println("abilitato: systemctl --user start powcon-plus")
+		fmt.Println("enabled: systemctl --user start powcon-plus")
 	default:
-		return fmt.Errorf("mode %q non valido (xdg|systemd)", *mode)
+		return fmt.Errorf("invalid mode %q (xdg|systemd)", *mode)
 	}
 	return nil
 }
@@ -386,7 +395,7 @@ func cmdUninstallAutostart(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("rimosso:", removed)
+		fmt.Println("removed:", removed)
 	case "systemd":
 		p, err := autostart.UnitPath()
 		if err != nil {
@@ -398,9 +407,9 @@ func cmdUninstallAutostart(args []string) error {
 			return err
 		}
 		autostart.SystemctlUser("daemon-reload")
-		fmt.Println("rimosso:", p)
+		fmt.Println("removed:", p)
 	default:
-		return fmt.Errorf("mode %q non valido (xdg|systemd)", *mode)
+		return fmt.Errorf("invalid mode %q (xdg|systemd)", *mode)
 	}
 	return nil
 }
@@ -409,7 +418,7 @@ func cmdUninstallAutostart(args []string) error {
 // installed binaries and, with --purge, the data and configuration dirs.
 func cmdUninstall(args []string) error {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
-	purge := fs.Bool("purge", false, "rimuove anche dati e configurazione")
+	purge := fs.Bool("purge", false, "also remove data and configuration")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -428,7 +437,7 @@ func cmdUninstall(args []string) error {
 	sock := filepath.Join(cfg.DataDir, "control.sock")
 	if _, serr := os.Stat(sock); serr == nil {
 		if _, qerr := ctl.Call(sock, ctl.Request{Cmd: "quit"}); qerr == nil {
-			add("daemon in esecuzione: fermato")
+			add("daemon running: stopped")
 		}
 		time.Sleep(300 * time.Millisecond) // let the socket close
 	}
@@ -454,7 +463,7 @@ func cmdUninstall(args []string) error {
 	if exe, eerr := autostart.SelfPath(); eerr == nil {
 		for _, p := range []string{exe, exe + "-gui"} {
 			if rerr := os.Remove(p); rerr == nil {
-				add("binario: " + p)
+				add("binary: " + p)
 			}
 		}
 	}
@@ -462,18 +471,18 @@ func cmdUninstall(args []string) error {
 	// 4. data and configuration, only with --purge
 	if *purge {
 		if rerr := os.RemoveAll(cfg.DataDir); rerr == nil {
-			add("dati: " + cfg.DataDir)
+			add("data: " + cfg.DataDir)
 		}
 		cfgDir := filepath.Dir(config.Path())
 		if rerr := os.RemoveAll(cfgDir); rerr == nil {
-			add("configurazione: " + cfgDir)
+			add("configuration: " + cfgDir)
 		}
 	} else {
-		fmt.Println("Dati (" + cfg.DataDir + ") e configurazione vengono mantenuti; usa --purge per rimuoverli.")
+		fmt.Println("Data (" + cfg.DataDir + ") and configuration kept; use --purge to remove them.")
 	}
 
 	if len(removed) == 0 {
-		fmt.Println("niente da rimuovere (o già assente).")
+		fmt.Println("nothing to remove (or already absent).")
 	}
 	return nil
 }
@@ -490,14 +499,14 @@ func cmdAutostartStatus(args []string) error {
 
 func cmdInitConfig(args []string) error {
 	fs := flag.NewFlagSet("init-config", flag.ContinueOnError)
-	out := fs.String("out", config.Path(), "dove scrivere")
+	out := fs.String("out", config.Path(), "where to write")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if err := config.WriteSample(*out); err != nil {
 		return err
 	}
-	fmt.Println("scritto:", *out)
+	fmt.Println("written:", *out)
 	return nil
 }
 
@@ -521,9 +530,9 @@ func sortStrings(s []string) {
 
 func fileExistsOrNot(p string) string {
 	if _, err := os.Stat(p); err == nil {
-		return p + " (presente)"
+		return p + " (present)"
 	}
-	return "assente"
+	return "absent"
 }
 
 func mustConfigDir() string {

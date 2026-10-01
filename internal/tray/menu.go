@@ -215,7 +215,7 @@ func (mm *menuMethods) GetProperty(id int32, name string) (dbus.Variant, *dbus.E
 	if n == nil {
 		return dbus.Variant{}, &dbus.Error{
 			Name: "org.freedesktop.DBus.Error.UnknownMethod",
-			Body: []interface{}{"item inesistente"},
+			Body: []interface{}{"no such item"},
 		}
 	}
 	p := mm.m.propsOf(n, nil)

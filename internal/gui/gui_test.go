@@ -17,7 +17,7 @@ import (
 	"powcon-plus/internal/status"
 )
 
-func snapshotDiProva() status.Snapshot {
+func testSnapshot() status.Snapshot {
 	now := time.Now()
 	return status.Snapshot{
 		Time: now, Sensor: "/sys/class/hwmon/hwmon0", Online: true,
@@ -44,46 +44,48 @@ func newTestUI(t *testing.T) *windowUI {
 	a := test.NewApp()
 	t.Cleanup(a.Quit)
 	w := a.NewWindow("test")
-	u := newUI(a, w, config.Default(), filepath.Join(t.TempDir(), "control.sock"))
+	cfg := config.Default()
+	cfg.Language = "it" // fixed language: the tests must not depend on the locale
+	u := newUI(a, w, cfg, filepath.Join(t.TempDir(), "control.sock"))
 	w.SetContent(u.root)
 	return u
 }
 
-func TestApplySnapshotPopolaFinestra(t *testing.T) {
+func TestApplySnapshotPopulatesWindow(t *testing.T) {
 	u := newTestUI(t)
-	snap := snapshotDiProva()
+	snap := testSnapshot()
 
 	applySnapshot(u.win, snap)
 
 	if got := u.power.Text; got != "148 W" {
-		t.Errorf("potenza = %q, atteso %q", got, "148 W")
+		t.Errorf("power = %q, expected %q", got, "148 W")
 	}
 	if !strings.Contains(u.summary.Text, "2.40 kWh") ||
 		!strings.Contains(u.summary.Text, "0.60 €") ||
 		!strings.Contains(u.summary.Text, "media 120 W") ||
 		!strings.Contains(u.summary.Text, "picco 312 W") {
-		t.Errorf("riepilogo = %q", u.summary.Text)
+		t.Errorf("summary = %q", u.summary.Text)
 	}
 	for _, c := range []struct{ key, want string }{
 		{"vin", "230.4"}, {"v12", "12.10"}, {"i12", "8.20"},
 		{"p12", "98.4"}, {"tvrm", "41.2"}, {"fan", "610 · 34%"},
 	} {
 		if got := u.cells[c.key].Text; got != c.want {
-			t.Errorf("cella %s = %q, atteso %q", c.key, got, c.want)
+			t.Errorf("cell %s = %q, expected %q", c.key, got, c.want)
 		}
 	}
 	if u.pauseBtn.Text != "Pausa" {
-		t.Errorf("pulsante pausa = %q", u.pauseBtn.Text)
+		t.Errorf("pause button = %q", u.pauseBtn.Text)
 	}
-	if u.modeSel.Selected != string(config.ModePower) {
-		t.Errorf("select etichetta = %q", u.modeSel.Selected)
+	if u.modeSel.Selected != u.cat.Get("ui.mode.power") {
+		t.Errorf("label select = %q", u.modeSel.Selected)
 	}
 	rows, cols := u.table.Length()
-	if rows != 2 || cols != 5 {
-		t.Errorf("tabella = %dx%d, atteso 2x5", rows, cols)
+	if rows != 3 || cols != 5 { // header row + 2 days
+		t.Errorf("table = %dx%d, expected 3x5", rows, cols)
 	}
 	if len(u.chart.series) != len(snap.History) || u.chart.alertW != 500 {
-		t.Errorf("grafico: serie=%d soglia=%.0f", len(u.chart.series), u.chart.alertW)
+		t.Errorf("chart: series=%d threshold=%.0f", len(u.chart.series), u.chart.alertW)
 	}
 
 	// offline snapshot: the rail values go to "—"
@@ -91,24 +93,24 @@ func TestApplySnapshotPopolaFinestra(t *testing.T) {
 	off.Online = false
 	applySnapshot(u.win, off)
 	if u.cells["v12"].Text != "—" {
-		t.Errorf("offline: v12 = %q, atteso %q", u.cells["v12"].Text, "—")
+		t.Errorf("offline: v12 = %q, expected %q", u.cells["v12"].Text, "—")
 	}
 }
 
-func TestTabellaLimitataA14Giorni(t *testing.T) {
+func TestTableLimitedTo14Days(t *testing.T) {
 	u := newTestUI(t)
-	snap := snapshotDiProva()
+	snap := testSnapshot()
 	snap.Days = nil
 	for i := 0; i < 20; i++ {
 		snap.Days = append(snap.Days, energy.Day{Date: "g", Wh: 1})
 	}
 	applySnapshot(u.win, snap)
-	if rows, _ := u.table.Length(); rows != tableDays {
-		t.Errorf("righe tabella = %d, atteso %d", rows, tableDays)
+	if rows, _ := u.table.Length(); rows != tableDays+1 { // +1 for the header row
+		t.Errorf("table rows = %d, expected %d", rows, tableDays+1)
 	}
 }
 
-func TestPowerChartHistoryVuotaNonPanicca(t *testing.T) {
+func TestPowerChartEmptyHistoryNoPanic(t *testing.T) {
 	a := test.NewApp()
 	defer a.Quit()
 
@@ -120,10 +122,10 @@ func TestPowerChartHistoryVuotaNonPanicca(t *testing.T) {
 	r.Layout(fyne.NewSize(700, 160))
 	objs := r.Objects()
 	if len(objs) < 5 {
-		t.Fatalf("oggetti renderer = %d, atteso >= 5", len(objs))
+		t.Fatalf("renderer objects = %d, expected >= 5", len(objs))
 	}
 	if c.MinSize().Width <= 0 || c.MinSize().Height <= 0 {
-		t.Errorf("MinSize non positiva: %v", c.MinSize())
+		t.Errorf("MinSize not positive: %v", c.MinSize())
 	}
 
 	// with series + threshold: the segments appear, no panic
@@ -135,7 +137,7 @@ func TestPowerChartHistoryVuotaNonPanicca(t *testing.T) {
 	c.SetSeries(series, 400)
 	r.Refresh()
 	if len(r.Objects()) <= len(objs) {
-		t.Errorf("attesi segmenti in più dopo SetSeries")
+		t.Errorf("expected more segments after SetSeries")
 	}
 	r.Destroy()
 }

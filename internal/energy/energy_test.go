@@ -21,23 +21,23 @@ func TestIntegrationTrapezoid(t *testing.T) {
 	wh, secs, avg, max, _ := a.Session()
 	want := 9 * 100.0 / 3600.0 // 9 intervals of 1 s at 100 W
 	if math.Abs(wh-want) > 1e-9 {
-		t.Errorf("Wh = %v, atteso %v", wh, want)
+		t.Errorf("Wh = %v, expected %v", wh, want)
 	}
 	if secs != 9 {
-		t.Errorf("secondi integrati = %v, atteso 9", secs)
+		t.Errorf("integrated seconds = %v, expected 9", secs)
 	}
 	if math.Abs(avg-100) > 1e-6 {
-		t.Errorf("media = %v, atteso 100", avg)
+		t.Errorf("avg = %v, expected 100", avg)
 	}
 	if max != 100 {
-		t.Errorf("picco = %v, atteso 100", max)
+		t.Errorf("peak = %v, expected 100", max)
 	}
 	d := a.Today()
 	if d.Samples != 9 {
-		t.Errorf("campioni del giorno = %d, atteso 9", d.Samples)
+		t.Errorf("day samples = %d, expected 9", d.Samples)
 	}
 	if d.MaxW != 100 || d.MinW != 100 {
-		t.Errorf("max/min = %v/%v, atteso 100/100", d.MaxW, d.MinW)
+		t.Errorf("max/min = %v/%v, expected 100/100", d.MaxW, d.MinW)
 	}
 	if math.Abs(d.Wh12-0.7*d.Wh) > 1e-9 || math.Abs(d.Wh5-0.2*d.Wh) > 1e-9 {
 		t.Errorf("energie per rail non coerenti: %+v", d)
@@ -56,12 +56,12 @@ func TestGapNotIntegrated(t *testing.T) {
 	a.Add(sampleAt(t0.Add(30*time.Second), 100))
 	wh, _, _, _, _ := a.Session()
 	if wh != 0 {
-		t.Fatalf("Wh = %v, atteso 0 (buco non integrato)", wh)
+		t.Fatalf("Wh = %v, expected 0 (gap not integrated)", wh)
 	}
 	a.Add(sampleAt(t0.Add(31*time.Second), 100))
 	wh, _, _, _, _ = a.Session()
 	if math.Abs(wh-100.0/3600) > 1e-9 {
-		t.Fatalf("Wh = %v, atteso %v", wh, 100.0/3600)
+		t.Fatalf("Wh = %v, expected %v", wh, 100.0/3600)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestDaysSortedDescAndSetDays(t *testing.T) {
 		t.Fatalf("ordinamento giorni: %+v", got)
 	}
 	if got[0].Costo(0.25) != 0.75 {
-		t.Errorf("costo = %v, atteso 0.75", got[0].Costo(0.25))
+		t.Errorf("cost = %v, expected 0.75", got[0].Costo(0.25))
 	}
 }
 
@@ -89,9 +89,9 @@ func TestHistoryWindow(t *testing.T) {
 	}
 	h := a.History()
 	if len(h) != 3 {
-		t.Fatalf("storico = %d campioni, atteso 3", len(h))
+		t.Fatalf("history = %d samples, expected 3", len(h))
 	}
 	if h[2].W != 109 {
-		t.Errorf("ultimo campione = %v, atteso 109", h[2].W)
+		t.Errorf("last sample = %v, expected 109", h[2].W)
 	}
 }
