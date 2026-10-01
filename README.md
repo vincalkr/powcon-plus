@@ -103,7 +103,8 @@ imposta `icon_mode = "name"` e `icon_name` nella configurazione.
 ```toml
 label_mode = "power"        # power | energy | both | none
 poll_interval = "1s"        # minima 200ms: il PSU aggrega ~1s
-price_eur_per_kwh = 0.25    # per la stima del costo
+price_per_kwh = 0.25        # tariffa per la stima del costo
+currency = ""               # EUR | USD | GBP | CNY | JPY; vuoto = in base alla lingua
 alert_power_w = 800         # notifica se la soglia è superata a lungo (0 = off)
 alert_sustain = "15s"
 sample_interval = "10s"     # ogni quanto salvare un campione

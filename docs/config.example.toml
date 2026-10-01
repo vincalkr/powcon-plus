@@ -15,8 +15,11 @@ label_mode = "power"
 format_w = "%.0f W"
 format_wh = "%.2f kWh"
 
-# Tariffa per la stima del costo (€/kWh).
-price_eur_per_kwh = 0.25
+# Tariffa per la stima del costo (valuta scelta con `currency`).
+price_per_kwh = 0.25
+# Valuta della stima del costo: EUR | USD | GBP | CNY | JPY
+# (vuoto = scelta in base alla lingua).
+currency = ""
 
 # Avviso desktop quando l'assorbimento resta sopra la soglia.
 # alert_power_w = 0 disattiva l'avviso.

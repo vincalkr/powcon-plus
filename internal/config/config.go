@@ -9,6 +9,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"powcon-plus/internal/currency"
 	"powcon-plus/internal/loc"
 )
 
@@ -37,8 +38,15 @@ type Config struct {
 	FormatW  string `toml:"format_w"`
 	FormatWh string `toml:"format_wh"`
 
-	// Tariff used for the cost estimate.
-	EurPerKWh float64 `toml:"price_eur_per_kwh"`
+	// Tariff used for the cost estimate, expressed in Currency.
+	PricePerKWh float64 `toml:"price_per_kwh"`
+
+	// Display currency of the cost estimate: EUR, USD, GBP, CNY, JPY.
+	Currency string `toml:"currency"`
+
+	// Legacy tariff from older configs (price_eur_per_kwh). Read only:
+	// migrated into PricePerKWh on load, nil (omitted) on save.
+	LegacyPrice *float64 `toml:"price_eur_per_kwh,omitempty"`
 
 	// Alerts: 0 = disabled. Sustain = required duration above the threshold.
 	AlertPowerW  float64  `toml:"alert_power_w"`
@@ -90,7 +98,8 @@ func Default() Config {
 		LabelMode:      ModePower,
 		FormatW:        "%.0f W",
 		FormatWh:       "%.2f kWh",
-		EurPerKWh:      0.25,
+		PricePerKWh:    0.25,
+		Currency:       "EUR",
 		AlertPowerW:    0,
 		AlertSustain:   Duration{15 * time.Second},
 		AlertCool:      Duration{5 * time.Minute},
@@ -127,6 +136,11 @@ func Load(path string) (Config, error) {
 		if _, err := toml.DecodeFile(path, &c); err != nil {
 			return c, fmt.Errorf("reading %s: %w", path, err)
 		}
+		// Migrate the legacy tariff field (old configs predate currency support).
+		if c.LegacyPrice != nil && *c.LegacyPrice > 0 {
+			c.PricePerKWh = *c.LegacyPrice
+		}
+		c.LegacyPrice = nil
 	} else if !os.IsNotExist(err) {
 		return c, err
 	}
@@ -166,8 +180,15 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("label_mode %q is not valid (power|energy|both|none)", c.LabelMode)
 	}
-	if c.EurPerKWh < 0 {
-		c.EurPerKWh = 0
+	if c.PricePerKWh < 0 {
+		c.PricePerKWh = 0
+	}
+	if c.Currency == "" {
+		// Follow the configured UI language when set; EUR otherwise.
+		c.Currency = currency.DefaultFor(c.Language)
+	}
+	if !currency.IsValid(c.Currency) {
+		return fmt.Errorf("currency %q is not supported (EUR|USD|GBP|CNY|JPY)", c.Currency)
 	}
 	if c.RetentionDays < 0 {
 		c.RetentionDays = 0

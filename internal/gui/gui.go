@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"powcon-plus/internal/autostart"
 	"powcon-plus/internal/config"
 	"powcon-plus/internal/ctl"
+	"powcon-plus/internal/currency"
 	"powcon-plus/internal/energy"
 	"powcon-plus/internal/loc"
 	"powcon-plus/internal/psu"
@@ -76,11 +78,13 @@ func Run(o Options) error {
 	u := newUI(a, w, cfg, filepath.Join(dataDir, sockName))
 	w.SetTitle(u.cat.Get("ui.window.title"))
 	w.SetContent(u.root)
-	w.Resize(fyne.NewSize(760, 560))
+	// Tall enough for the chart, the sensor grid and the days table;
+	// the user can still resize (Fyne persists the size per window).
+	w.Resize(fyne.NewSize(780, 740))
 	w.SetOnClosed(u.stop)
 	u.start()
 	w.Show() // map the window before entering the event loop (Fyne does not auto-show)
-	a.Run() // blocks until the last window is closed
+	a.Run()  // blocks until the last window is closed
 	u.stop()
 	return nil
 }
@@ -95,33 +99,44 @@ type windowUI struct {
 	cat      *loc.Catalog
 	langCode string
 
-	root         *fyne.Container
-	power        *widget.Label
-	summary      *widget.RichText
-	daemon       *widget.RichText
-	chart        *powerChart
-	cells        map[string]*widget.Label
-	gridCaps     map[string]*widget.RichText
-	table        *widget.Table
-	pauseBtn     *widget.Button
-	modeSel      *widget.Select
-	langSel      *widget.Select
-	autostart    *widget.Check
-	labelCaption *widget.RichText
-	langCaption  *widget.RichText
-	reportBtn    *widget.Button
-	quitBtn      *widget.Button
+	root            *fyne.Container
+	power           *widget.Label
+	summary         *widget.RichText
+	daemon          *widget.RichText
+	chart           *powerChart
+	cells           map[string]*widget.Label
+	gridCaps        map[string]*widget.RichText
+	table           *widget.Table
+	pauseBtn        *widget.Button
+	modeSel         *widget.Select
+	langSel         *widget.Select
+	autostart       *widget.Check
+	priceEntry      *widget.Entry
+	currencySel     *widget.Select
+	labelCaption    *widget.RichText
+	langCaption     *widget.RichText
+	priceCaption    *widget.RichText
+	currencyCaption *widget.RichText
+	reportBtn       *widget.Button
+	quitBtn         *widget.Button
 
-	days        []energy.Day
-	localSeries []energy.Sample // used when the snapshot carries no history
-	lastSnap    status.Snapshot
-	haveSnap    bool
-	lastMode    config.LabelMode
-	paused      bool
-	syncingMode bool // avoids a loop when syncing the Select from the snapshot
-	syncingLang bool // avoids a loop when syncing the language select
-	autoSync    bool // avoids a loop when syncing the autostart checkbox
-	autoOn      bool // last known autostart state
+	days         []energy.Day
+	localSeries  []energy.Sample // used when the snapshot carries no history
+	lastSnap     status.Snapshot
+	haveSnap     bool
+	lastMode     config.LabelMode
+	paused       bool
+	price        float64 // last known tariff (per kWh, in `currency`)
+	currency     string  // last known display currency
+	syncingMode  bool    // avoids a loop when syncing the Select from the snapshot
+	syncingLang  bool    // avoids a loop when syncing the language select
+	syncingPrice bool    // avoids a loop when syncing the price widgets
+	priceSynced  bool    // the price/currency widgets got their first snapshot value
+	autoSync     bool    // avoids a loop when syncing the autostart checkbox
+	autoOn       bool    // last known autostart state
+
+	priceMu    sync.Mutex
+	priceTimer *time.Timer // debounces the tariff entry before committing
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -175,10 +190,29 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 	u.autoSync = true // initial sync does not command the daemon
 	u.autostart.SetChecked(false)
 	u.autoSync = false
-	u.labelCaption = newCaption(u.cat.Get("ui.bar.label"))
+
+	// The mode select controls the text shown next to the tray icon; the
+	// caption is intentionally fixed to "Tray icon" in every language.
+	u.labelCaption = newCaption("Tray icon")
 	u.langCaption = newCaption(u.cat.Get("ui.bar.language"))
 	bar := container.NewHBox(u.pauseBtn, u.labelCaption, u.modeSel,
 		u.autostart, u.langCaption, u.langSel, u.reportBtn, u.quitBtn)
+
+	// cost settings: tariff per kWh (in the display currency) and currency
+	u.price = cfg.PricePerKWh
+	u.currency = cfg.Currency
+	u.priceCaption = newCaption(u.cat.Get("ui.bar.price"))
+	u.currencyCaption = newCaption(u.cat.Get("ui.bar.currency"))
+	u.priceEntry = widget.NewEntry()
+	u.priceEntry.PlaceHolder = "0.25"
+	u.priceEntry.OnChanged = u.onPriceEdited
+	u.currencySel = widget.NewSelect(currency.Supported, u.onCurrencyChanged)
+	u.syncingPrice = true // initialization must not command the daemon
+	u.priceEntry.SetText(fmt.Sprintf("%g", cfg.PricePerKWh))
+	u.currencySel.SetSelected(cfg.Currency)
+	u.syncingPrice = false
+	bar2 := container.NewHBox(u.priceCaption, u.priceEntry,
+		u.currencyCaption, u.currencySel)
 
 	// daemon status display (on the right in the header)
 	u.daemon = newCaption("…")
@@ -207,8 +241,9 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 		u.gridCaps["vin"], u.gridCaps["tvrm"], u.gridCaps["tcase"], u.gridCaps["fan"],
 		u.cells["vin"], u.cells["tvrm"], u.cells["tcase"], u.cells["fan"])
 
-	// last days table (row 0 is the header)
-	colKeys := []string{"date", "kwh", "euro", "avg", "peak"}
+	// last days table (row 0 is the header; the cost column header is the
+	// currency symbol, which comes from the configuration, not the catalog)
+	colKeys := []string{"date", "kwh", "", "avg", "peak"}
 	u.table = widget.NewTable(
 		func() (int, int) { return len(u.days) + 1, len(colKeys) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
@@ -218,6 +253,10 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 				return
 			}
 			if id.Row == 0 {
+				if id.Col == 2 {
+					l.SetText(currency.Symbol(u.currency))
+					return
+				}
 				l.SetText(u.cat.Get("ui.table." + colKeys[id.Col]))
 				return
 			}
@@ -231,7 +270,7 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 			case 1:
 				l.SetText(fmt.Sprintf("%.3f", d.Wh/1000))
 			case 2:
-				l.SetText(fmt.Sprintf("%.2f", d.Costo(u.cfg.EurPerKWh)))
+				l.SetText(fmt.Sprintf("%.2f", d.Cost(u.price)))
 			case 3:
 				l.SetText(fmt.Sprintf("%.0f", d.AvgW()))
 			case 4:
@@ -242,7 +281,7 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 		u.table.SetColumnWidth(i, wd)
 	}
 
-	top := container.NewVBox(bar, header, u.chart, railGrid, envGrid)
+	top := container.NewVBox(bar, bar2, header, u.chart, railGrid, envGrid)
 	u.root = container.NewBorder(top, nil, nil, nil, u.table)
 	registerUI(w, u)
 	return u
@@ -284,8 +323,10 @@ func captionText(rt *widget.RichText) string {
 // runs from the UI thread (the language select callback).
 func (u *windowUI) retranslate() {
 	u.win.SetTitle(u.cat.Get("ui.window.title"))
-	setCaption(u.labelCaption, u.cat.Get("ui.bar.label"))
+	setCaption(u.labelCaption, "Tray icon") // fixed in every language
 	setCaption(u.langCaption, u.cat.Get("ui.bar.language"))
+	setCaption(u.priceCaption, u.cat.Get("ui.bar.price"))
+	setCaption(u.currencyCaption, u.cat.Get("ui.bar.currency"))
 	u.reportBtn.SetText(u.cat.Get("ui.bar.report"))
 	u.quitBtn.SetText(u.cat.Get("ui.bar.quit"))
 	u.autostart.SetText(u.cat.Get("ui.bar.autostart"))
@@ -300,12 +341,13 @@ func (u *windowUI) retranslate() {
 	u.syncingMode = false
 	u.modeSel.Refresh()
 	for key, l := range u.gridCaps {
-		setCaption(l, u.cat.Get("ui.grid." + key))
+		setCaption(l, u.cat.Get("ui.grid."+key))
 	}
 	u.chart.SetCatalog(u.cat)
 	if u.haveSnap {
 		setCaption(u.summary, u.cat.Sprintf("ui.summary.today",
-			u.lastSnap.TodayWh/1000, u.lastSnap.TodayCostEuro, u.lastSnap.TodayAvgW, u.lastSnap.TodayMaxW))
+			u.lastSnap.TodayWh/1000, u.lastSnap.TodayCost, currency.Symbol(u.lastSnap.Currency),
+			u.lastSnap.TodayAvgW, u.lastSnap.TodayMaxW))
 	} else {
 		setCaption(u.summary, u.cat.Get("ui.header.waiting"))
 	}
@@ -335,9 +377,24 @@ func (u *windowUI) render(s status.Snapshot) {
 	u.lastSnap = s
 	u.haveSnap = true
 	u.lastMode = s.LabelMode
+	u.price = s.Price
+	u.currency = s.Currency
 	u.power.SetText(s.WLabel(u.cfg.FormatW))
 	setCaption(u.summary, u.cat.Sprintf("ui.summary.today",
-		s.TodayWh/1000, s.TodayCostEuro, s.TodayAvgW, s.TodayMaxW))
+		s.TodayWh/1000, s.TodayCost, currency.Symbol(s.Currency), s.TodayAvgW, s.TodayMaxW))
+
+	// keep the price widgets in sync with the daemon
+	if !u.priceSynced {
+		u.priceSynced = true
+		u.syncingPrice = true
+		u.priceEntry.SetText(fmt.Sprintf("%g", s.Price))
+		u.currencySel.SetSelected(s.Currency)
+		u.syncingPrice = false
+	} else if u.currencySel.Selected != s.Currency {
+		u.syncingPrice = true
+		u.currencySel.SetSelected(s.Currency)
+		u.syncingPrice = false
+	}
 
 	val := func(v float64, format string) string {
 		if !s.Online {
@@ -467,6 +524,57 @@ func (u *windowUI) setLang(name string) {
 	}()
 }
 
+// onPriceEdited debounces the tariff entry and commits the value once the
+// user stops typing.
+func (u *windowUI) onPriceEdited(s string) {
+	if u.syncingPrice {
+		return
+	}
+	price, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || price < 0 {
+		return
+	}
+	u.priceMu.Lock()
+	if u.priceTimer != nil {
+		u.priceTimer.Stop()
+	}
+	u.priceTimer = time.AfterFunc(500*time.Millisecond, func() {
+		// read the currency on the UI thread, then commit
+		fyne.Do(func() {
+			go u.sendPrice(price, u.currencySel.Selected)
+		})
+	})
+	u.priceMu.Unlock()
+}
+
+// onCurrencyChanged commits the tariff together with the new currency.
+func (u *windowUI) onCurrencyChanged(code string) {
+	if u.syncingPrice || !currency.IsValid(code) {
+		return
+	}
+	price, err := strconv.ParseFloat(strings.TrimSpace(u.priceEntry.Text), 64)
+	if err != nil || price < 0 {
+		price = u.cfg.PricePerKWh
+	}
+	go u.sendPrice(price, code)
+}
+
+// sendPrice persists the tariff and the currency (through the daemon when it
+// is up, directly to the configuration otherwise).
+func (u *windowUI) sendPrice(price float64, cur string) {
+	if u.sockUp() {
+		ctl.Call(u.sock, ctl.Request{Cmd: "price", Args: map[string]any{"price": price, "currency": cur}})
+		return
+	}
+	cfg, err := config.Load("")
+	if err != nil {
+		return
+	}
+	cfg.PricePerKWh = price
+	cfg.Currency = cur
+	_ = config.Save(config.Path(), cfg)
+}
+
 // syncAutostartState loads the current autostart state into the checkbox.
 // It asks the daemon when it is up, otherwise it reads the filesystem.
 func (u *windowUI) syncAutostartState() {
@@ -531,17 +639,18 @@ func (u *windowUI) showReport() {
 	if len(u.days) == 0 {
 		b.WriteString(u.cat.Get("ui.report.empty"))
 	} else {
+		sym := currency.Symbol(u.currency)
 		fmt.Fprintf(&b, "%-10s %8s %8s %7s %7s\n",
-			u.cat.Get("ui.table.date"), u.cat.Get("ui.table.kwh"), u.cat.Get("ui.table.euro"),
+			u.cat.Get("ui.table.date"), u.cat.Get("ui.table.kwh"), sym,
 			u.cat.Get("ui.table.avg"), u.cat.Get("ui.table.peak"))
 		var tot float64
 		for _, d := range u.days {
 			tot += d.Wh
 			fmt.Fprintf(&b, "%-10s %8.3f %8.2f %7.0f %7.0f\n",
-				d.Date, d.Wh/1000, d.Costo(u.cfg.EurPerKWh), d.AvgW(), d.MaxW)
+				d.Date, d.Wh/1000, d.Cost(u.price), d.AvgW(), d.MaxW)
 		}
 		fmt.Fprintf(&b, "%-10s %8.3f %8.2f\n",
-			u.cat.Get("ui.report.total"), tot/1000, tot/1000*u.cfg.EurPerKWh)
+			u.cat.Get("ui.report.total"), tot/1000, tot/1000*u.price)
 	}
 	dialog.ShowInformation(u.cat.Get("ui.report.title"), b.String(), u.win)
 }
@@ -637,7 +746,7 @@ func (u *windowUI) pumpLocal() {
 			} else {
 				acc.Add(s)
 				u.apply(status.Build(s, acc, rd.Dir, false,
-					u.cfg.LabelMode, u.cfg.AlertPowerW, u.cfg.EurPerKWh,
+					u.cfg.LabelMode, u.cfg.AlertPowerW, u.cfg.PricePerKWh, u.cfg.Currency,
 					acc.Days(), acc.History()))
 			}
 		}

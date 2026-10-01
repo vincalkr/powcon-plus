@@ -34,8 +34,9 @@ func (d Day) AvgW() float64 {
 	return d.Wh * 3600 / d.DurationS
 }
 
-// Costo estimates the expense at the given tariff (€/kWh).
-func (d Day) Costo(eurPerKWh float64) float64 { return d.kWh() * eurPerKWh }
+// Cost estimates the expense at the given tariff (per kWh, in the
+// configured currency).
+func (d Day) Cost(pricePerKWh float64) float64 { return d.kWh() * pricePerKWh }
 
 // kWh is the energy in kilowatt-hours.
 func (s *Sample) kWh() float64 { return s.Wh / 1000 }

@@ -76,8 +76,8 @@ func TestDaysSortedDescAndSetDays(t *testing.T) {
 	if len(got) != 3 || got[0].Date != "2026-01-03" || got[2].Date != "2026-01-01" {
 		t.Fatalf("ordinamento giorni: %+v", got)
 	}
-	if got[0].Costo(0.25) != 0.75 {
-		t.Errorf("cost = %v, expected 0.75", got[0].Costo(0.25))
+	if got[0].Cost(0.25) != 0.75 {
+		t.Errorf("cost = %v, expected 0.75", got[0].Cost(0.25))
 	}
 }
 

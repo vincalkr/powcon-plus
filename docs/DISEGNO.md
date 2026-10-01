@@ -108,7 +108,7 @@ click centrale/rotellina = cambia modalità etichetta; tasto destro = menu.
 
 `daily.json` (per giorno, fuso locale): `wh` (AC), `wh12/wh5/wh33` (stima sui
 rail), `samples`, `max_w`, `min_w`, `duration_s`, `updated`. `AvgW` è derivato
-(`Wh × 3600 / duration_s`), il costo da `price_eur_per_kwh`. Retention dei
+(`Wh × 3600 / duration_s`), il costo da `price_per_kwh` (in `currency`). Retention dei
 campioni crudi: `retention_days` (default 31); i rollup non vengono potati.
 
 ## 5. Configurazione
@@ -119,7 +119,8 @@ poll_interval = "1s"
 label_mode = "power"         # power | energy | both | none
 format_w  = "%.0f W"
 format_wh = "%.2f kWh"
-price_eur_per_kwh = 0.25
+price_per_kwh = 0.25
+currency = ""                # EUR | USD | GBP | CNY | JPY (vuoto = dalla lingua)
 alert_power_w = 0            # 0 = disattivo
 alert_sustain = "15s"
 alert_cooldown = "5m"

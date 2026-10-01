@@ -26,6 +26,7 @@ import (
 	"powcon-plus/internal/autostart"
 	"powcon-plus/internal/config"
 	"powcon-plus/internal/ctl"
+	"powcon-plus/internal/currency"
 	"powcon-plus/internal/daemon"
 	"powcon-plus/internal/energy"
 	"powcon-plus/internal/psu"
@@ -95,7 +96,7 @@ Usage:
                                      per-day kWh/cost summary
   powcon-plus window                 detail window (gui-tagged build)
   powcon-plus ctl <cmd> [k=v...]     control the daemon
-                                      (status|pause|resume|label-mode|alert|ui-language|autostart-status|autostart-set enabled=1|quit)
+                                      (status|pause|resume|label-mode|alert|ui-language|price|autostart-status|autostart-set enabled=1|quit)
   powcon-plus sensors                list the detected PSU hwmon channels
   powcon-plus install-autostart [--mode xdg|systemd]
   powcon-plus uninstall-autostart
@@ -187,7 +188,7 @@ func cmdStatus(args []string) error {
 	}
 	acc := energy.NewAccumulator(5*time.Second, 0, 0)
 	acc.Add(s)
-	snap := status.Build(s, acc, dir, false, cfg.LabelMode, 0, cfg.EurPerKWh, nil, nil)
+	snap := status.Build(s, acc, dir, false, cfg.LabelMode, 0, cfg.PricePerKWh, cfg.Currency, nil, nil)
 	snap.TodayWh = 0
 	printSnapshot(snap, cfg, *jsonOut)
 	return nil
@@ -225,8 +226,8 @@ func printSnapshot(s status.Snapshot, cfg config.Config, asJSON bool) {
 			s.SessionWh/1000, fmtDur(s.SessionSeconds), s.SessionAvgW, s.SessionMaxW)
 	}
 	if s.TodaySamples > 0 {
-		fmt.Printf("today:        %.2f kWh  (%.2f €)  avg %.0f W  peak %.0f W  min %.0f W\n",
-			s.TodayWh/1000, s.TodayCostEuro, s.TodayAvgW, s.TodayMaxW, s.TodayMinW)
+		fmt.Printf("today:        %.2f kWh  (%.2f %s)  avg %.0f W  peak %.0f W  min %.0f W\n",
+			s.TodayWh/1000, s.TodayCost, currency.Symbol(s.Currency), s.TodayAvgW, s.TodayMaxW, s.TodayMinW)
 	}
 }
 
@@ -259,23 +260,24 @@ func cmdReport(args []string) error {
 	}
 	w := csv.NewWriter(os.Stdout)
 	if *asCSV {
-		w.Write([]string{"date", "kwh", "euro", "avg_w", "peak_w", "min_w", "samples"})
+		w.Write([]string{"date", "kwh", "cost", "avg_w", "peak_w", "min_w", "samples"})
 		for _, d := range all {
 			w.Write([]string{d.Date, fmt.Sprintf("%.3f", d.Wh/1000),
-				fmt.Sprintf("%.3f", d.Costo(cfg.EurPerKWh)), fmt.Sprintf("%.0f", d.AvgW()),
+				fmt.Sprintf("%.3f", d.Cost(cfg.PricePerKWh)), fmt.Sprintf("%.0f", d.AvgW()),
 				fmt.Sprintf("%.0f", d.MaxW), fmt.Sprintf("%.0f", d.MinW), strconv.Itoa(d.Samples)})
 		}
 		w.Flush()
 		return w.Error()
 	}
 	var tot float64
-	fmt.Printf("%-12s %9s %9s %9s %9s %9s %9s\n", "date", "kWh", "€", "avg W", "peak W", "min W", "samples")
+	sym := currency.Symbol(cfg.Currency)
+	fmt.Printf("%-12s %9s %9s %9s %9s %9s %9s\n", "date", "kWh", sym, "avg W", "peak W", "min W", "samples")
 	for _, d := range all {
 		tot += d.Wh
 		fmt.Printf("%-12s %9.3f %9.3f %9.0f %9.0f %9.0f %9d\n",
-			d.Date, d.Wh/1000, d.Costo(cfg.EurPerKWh), d.AvgW(), d.MaxW, d.MinW, d.Samples)
+			d.Date, d.Wh/1000, d.Cost(cfg.PricePerKWh), d.AvgW(), d.MaxW, d.MinW, d.Samples)
 	}
-	fmt.Printf("%-12s %9.3f %9.3f\n", "TOTAL", tot/1000, tot/1000*cfg.EurPerKWh)
+	fmt.Printf("%-12s %9.3f %9.3f\n", "TOTAL", tot/1000, tot/1000*cfg.PricePerKWh)
 	return nil
 }
 
@@ -317,7 +319,7 @@ func cmdSensors(args []string) error {
 
 func cmdCtl(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: powcon-plus ctl <cmd> [k=v ...] (status|pause|resume|label-mode|alert|ui-language|autostart-status|autostart-set enabled=1|quit)")
+		return fmt.Errorf("usage: powcon-plus ctl <cmd> [k=v ...] (status|pause|resume|label-mode|alert|ui-language|price|autostart-status|autostart-set enabled=1|quit)")
 	}
 	cfg, err := config.Load("")
 	if err != nil {

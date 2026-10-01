@@ -41,20 +41,21 @@ type Snapshot struct {
 	SessionMaxAt   time.Time `json:"session_max_at,omitempty"`
 
 	// today
-	TodayDate     string  `json:"today_date"`
-	TodayWh       float64 `json:"today_wh"`
-	TodayMaxW     float64 `json:"today_max_w"`
-	TodayMinW     float64 `json:"today_min_w"`
-	TodaySamples  int     `json:"today_samples"`
-	TodaySeconds  float64 `json:"today_seconds"`
-	TodayAvgW     float64 `json:"today_avg_w"`
-	TodayCostEuro float64 `json:"today_cost_eur"`
+	TodayDate    string  `json:"today_date"`
+	TodayWh      float64 `json:"today_wh"`
+	TodayMaxW    float64 `json:"today_max_w"`
+	TodayMinW    float64 `json:"today_min_w"`
+	TodaySamples int     `json:"today_samples"`
+	TodaySeconds float64 `json:"today_seconds"`
+	TodayAvgW    float64 `json:"today_avg_w"`
+	TodayCost    float64 `json:"today_cost"`
 
 	// effective configuration
 	Paused    bool             `json:"paused"`
 	LabelMode config.LabelMode `json:"label_mode"`
 	AlertW    float64          `json:"alert_w"`
-	Price     float64          `json:"price_eur_per_kwh"`
+	Price     float64          `json:"price_per_kwh"`
+	Currency  string           `json:"currency"`
 
 	Days    []energy.Day    `json:"days,omitempty"`
 	History []energy.Sample `json:"history,omitempty"`
@@ -62,7 +63,8 @@ type Snapshot struct {
 
 // Build assembles a snapshot from the daemon state.
 func Build(s *psu.Sample, acc *energy.Accumulator, sensor string, paused bool,
-	mode config.LabelMode, alertW, price float64, days []energy.Day, hist []energy.Sample) Snapshot {
+	mode config.LabelMode, alertW, price float64, currency string,
+	days []energy.Day, hist []energy.Sample) Snapshot {
 	snap := Snapshot{
 		Time:      time.Now(),
 		Sensor:    sensor,
@@ -70,6 +72,7 @@ func Build(s *psu.Sample, acc *energy.Accumulator, sensor string, paused bool,
 		LabelMode: mode,
 		AlertW:    alertW,
 		Price:     price,
+		Currency:  currency,
 		Days:      days,
 		History:   hist,
 	}
@@ -90,7 +93,7 @@ func Build(s *psu.Sample, acc *energy.Accumulator, sensor string, paused bool,
 	snap.TodaySamples = d.Samples
 	snap.TodaySeconds = d.DurationS
 	snap.TodayAvgW = d.AvgW()
-	snap.TodayCostEuro = d.Costo(price)
+	snap.TodayCost = d.Cost(price)
 	return snap
 }
 

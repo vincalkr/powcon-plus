@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"powcon-plus/internal/autostart"
 	"powcon-plus/internal/config"
 	"powcon-plus/internal/ctl"
+	"powcon-plus/internal/currency"
 	"powcon-plus/internal/energy"
 	"powcon-plus/internal/loc"
 	"powcon-plus/internal/notify"
@@ -63,6 +66,8 @@ type App struct {
 	sensorLost bool
 	language   string
 	cat        *loc.Catalog
+	price      float64
+	currency   string
 
 	subMu sync.Mutex
 	subs  map[chan status.Snapshot]struct{}
@@ -91,6 +96,8 @@ func New(o Options) (*App, error) {
 	a.cfgPath = path
 	a.labelMode = cfg.LabelMode
 	a.alertW = cfg.AlertPowerW
+	a.price = cfg.PricePerKWh
+	a.currency = cfg.Currency
 
 	// Resolve the UI language: explicit config value, then locale, then English.
 	lang := cfg.Language
@@ -303,8 +310,10 @@ func (a *App) snapshot() status.Snapshot {
 	paused := a.paused
 	mode := a.labelMode
 	alertW := a.alertW
+	price := a.price
+	currency := a.currency
 	a.mu.RUnlock()
-	return status.Build(smp, a.acc, a.sensor, paused, mode, alertW, a.cfg.EurPerKWh,
+	return status.Build(smp, a.acc, a.sensor, paused, mode, alertW, price, currency,
 		lastDays(a.acc.Days(), 14), a.acc.History())
 }
 
@@ -401,7 +410,8 @@ func (a *App) refreshTray(smp *psu.Sample) {
 	}
 	if snap.Online {
 		a.item.SetToolTip(cat.Get("tray.title"), cat.Sprintf("tray.tooltip",
-			snap.W, snap.TodayWh/1000, snap.TodayCostEuro, snap.TodayAvgW, snap.TodayMaxW,
+			snap.W, snap.TodayWh/1000, snap.TodayCost, currency.Symbol(snap.Currency),
+			snap.TodayAvgW, snap.TodayMaxW,
 			snap.I12, snap.I5, snap.I33, snap.TVRM, snap.TCase, snap.Fan))
 	} else {
 		a.item.SetLabel(cat.Get("tray.offline.label"))
@@ -500,8 +510,12 @@ func (a *App) rebuildMenu() {
 }
 
 func (a *App) reportText(days int) string {
+	a.mu.RLock()
+	price, cur := a.price, a.currency
+	a.mu.RUnlock()
 	all := a.acc.Days()
 	cat := a.catNow()
+	sym := currency.Symbol(cur)
 	var lines []string
 	total := 0.0
 	for i, d := range all {
@@ -509,13 +523,13 @@ func (a *App) reportText(days int) string {
 			break
 		}
 		total += d.Wh
-		lines = append(lines, fmt.Sprintf("%s  %6.2f kWh  %5.2f €  %s",
-			d.Date, d.Wh/1000, d.Costo(a.cfg.EurPerKWh), cat.Sprintf("tray.report.peak", d.MaxW)))
+		lines = append(lines, fmt.Sprintf("%s  %6.2f kWh  %5.2f %s  %s",
+			d.Date, d.Wh/1000, d.Cost(price), sym, cat.Sprintf("tray.report.peak", d.MaxW)))
 	}
 	if len(lines) == 0 {
 		return cat.Get("tray.report.empty")
 	}
-	return fmt.Sprintf("%v\n%s", lines, cat.Sprintf("tray.report.total", total/1000, total/1000*a.cfg.EurPerKWh))
+	return fmt.Sprintf("%v\n%s", lines, cat.Sprintf("tray.report.total", total/1000, total/1000*price, sym))
 }
 
 func (a *App) effectiveConfig() config.Config {
@@ -524,6 +538,8 @@ func (a *App) effectiveConfig() config.Config {
 	c.LabelMode = a.labelMode
 	c.AlertPowerW = a.alertW
 	c.Language = a.language
+	c.PricePerKWh = a.price
+	c.Currency = a.currency
 	a.mu.RUnlock()
 	return c
 }
@@ -650,6 +666,12 @@ func parseEnabled(args map[string]any) bool {
 	return false
 }
 
+// parseFloat64 parses a ctl numeric argument, tolerating the string form
+// produced by the CLI.
+func parseFloat64(s string) (float64, error) {
+	return strconv.ParseFloat(strings.TrimSpace(s), 64)
+}
+
 func (a *App) registerCtl(s *ctl.Server) {
 	s.Handle("status", func(map[string]any) (any, error) { return a.snapshot(), nil })
 	s.Handle("pause", func(map[string]any) (any, error) {
@@ -718,6 +740,45 @@ func (a *App) registerCtl(s *ctl.Server) {
 		a.refreshTray(a.lastSample())
 		a.rebuildMenu()
 		return map[string]any{"language": lang}, nil
+	})
+
+	s.Handle("price", func(args map[string]any) (any, error) {
+		var price float64
+		hasPrice := false
+		if v, ok := args["price"]; ok {
+			switch t := v.(type) {
+			case float64:
+				price, hasPrice = t, true
+			case string:
+				if p, err := parseFloat64(t); err == nil {
+					price, hasPrice = p, true
+				} else {
+					return nil, errors.New("price must be a number")
+				}
+			}
+		}
+		if hasPrice && price < 0 {
+			return nil, errors.New("price must be >= 0")
+		}
+		cur, _ := args["currency"].(string)
+		if cur != "" && !currency.IsValid(cur) {
+			return nil, fmt.Errorf("currency %q is not supported (EUR|USD|GBP|CNY|JPY)", cur)
+		}
+		a.mu.Lock()
+		if hasPrice {
+			a.price = price
+		}
+		if cur != "" {
+			a.currency = cur
+		}
+		p, c := a.price, a.currency
+		a.mu.Unlock()
+		if err := config.Save(a.cfgPath, a.effectiveConfig()); err != nil {
+			a.log.Printf("saving configuration: %v", err)
+		}
+		a.refreshTray(a.lastSample())
+		a.rebuildMenu()
+		return map[string]any{"price_per_kwh": p, "currency": c}, nil
 	})
 
 	// Autostart is toggled from the UI (window checkbox / tray menu item);

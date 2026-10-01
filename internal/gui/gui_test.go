@@ -25,8 +25,8 @@ func testSnapshot() status.Snapshot {
 		I12: 8.2, I5: 1.1, I33: 0.6,
 		W: 148.2, P12: 98.4, P5: 5.5, P33: 2.0,
 		TVRM: 41.2, TCase: 37.5, Fan: 610, PWM: 34,
-		TodayWh: 2400, TodayAvgW: 120, TodayMaxW: 312, TodayCostEuro: 0.6,
-		LabelMode: config.ModePower, AlertW: 500, Price: 0.25,
+		TodayWh: 2400, TodayAvgW: 120, TodayMaxW: 312, TodayCost: 0.6,
+		LabelMode: config.ModePower, AlertW: 500, Price: 0.25, Currency: "EUR",
 		Days: []energy.Day{
 			{Date: "2026-09-30", Wh: 2400, DurationS: 7200, MaxW: 312, MinW: 40},
 			{Date: "2026-09-29", Wh: 5100, DurationS: 36000, MaxW: 402, MinW: 35},
@@ -95,6 +95,27 @@ func TestApplySnapshotPopulatesWindow(t *testing.T) {
 	applySnapshot(u.win, off)
 	if u.cells["v12"].Text != "—" {
 		t.Errorf("offline: v12 = %q, expected %q", u.cells["v12"].Text, "—")
+	}
+}
+
+func TestSummaryUsesConfiguredCurrency(t *testing.T) {
+	u := newTestUI(t)
+	snap := testSnapshot()
+	snap.Currency = "USD"
+	snap.Price = 0.30
+	snap.TodayCost = 0.72
+
+	applySnapshot(u.win, snap)
+
+	summary := captionText(u.summary)
+	if !strings.Contains(summary, "0.72 $") {
+		t.Errorf("summary = %q, expected the USD symbol", summary)
+	}
+	if u.currencySel.Selected != "USD" {
+		t.Errorf("currency select = %q, expected %q", u.currencySel.Selected, "USD")
+	}
+	if u.priceEntry.Text != "0.3" {
+		t.Errorf("price entry = %q, expected %q", u.priceEntry.Text, "0.3")
 	}
 }
 
