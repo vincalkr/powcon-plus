@@ -108,8 +108,10 @@ click centrale/rotellina = cambia modalità etichetta; tasto destro = menu.
 
 `daily.json` (per giorno, fuso locale): `wh` (AC), `wh12/wh5/wh33` (stima sui
 rail), `samples`, `max_w`, `min_w`, `duration_s`, `updated`. `AvgW` è derivato
-(`Wh × 3600 / duration_s`), il costo da `price_per_kwh` (in `currency`). Retention dei
-campioni crudi: `retention_days` (default 31); i rollup non vengono potati.
+(`Wh × 3600 / duration_s`), il costo da `price_per_kwh` (in `currency`).
+Retention dei campioni crudi: `retention_days` (default 31); i rollup non
+vengono potati. `sample_store = false` disattiva la scrittura di entrambi i
+file di storico (tabella e report limitati alla sessione corrente).
 
 ## 5. Configurazione
 
@@ -124,9 +126,10 @@ currency = ""                # EUR | USD | GBP | CNY | JPY (vuoto = dalla lingua
 alert_power_w = 0            # 0 = disattivo
 alert_sustain = "15s"
 alert_cooldown = "5m"
-sample_store = true
+sample_store = true          # false = nessun file di storico
 sample_interval = "10s"
 retention_days = 31
+data_dir = ""                # vuoto = ~/.local/share/powcon-plus
 single_instance = true
 start_window = false
 icon_mode = "pixmap"         # pixmap (generate) | name (icona di tema)

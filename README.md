@@ -107,8 +107,10 @@ price_per_kwh = 0.25        # tariffa per la stima del costo
 currency = ""               # EUR | USD | GBP | CNY | JPY; vuoto = in base alla lingua
 alert_power_w = 800         # notifica se la soglia è superata a lungo (0 = off)
 alert_sustain = "15s"
+sample_store = true         # false = non salvare storico (campioni + daily.json)
 sample_interval = "10s"     # ogni quanto salvare un campione
 retention_days = 31         # giorni di campioni crudi da tenere
+data_dir = ""               # cartella dei file; vuoto = ~/.local/share/powcon-plus
 sensor = ""                 # vuoto = auto-detect; es. "hwmon8" per forzare
 language = ""               # it | en | de | fr | es | zh | ja; vuoto = dalla locale
 ```

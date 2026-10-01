@@ -27,12 +27,15 @@ alert_power_w = 0
 alert_sustain = "15s"
 alert_cooldown = "5m"
 
-# Persistenza dei campioni grezzi (JSONL, un file per giorno).
+# Storico: con sample_store = false il daemon non scrive nessun file di
+# storico (né i campioni grezzi JSONL, né il rollup giornaliero daily.json);
+# tabella e report mostrano solo la sessione corrente.
 sample_store = true
-sample_interval = "10s"
-retention_days = 31
+sample_interval = "10s"   # ogni quanto scrivere un campione grezzo
+retention_days = 31       # quanti giorni di campioni grezzi conservare
 
-# Vuoto = ~/.local/share/powcon-plus
+# Cartella dei file (storico, lock, socket di controllo).
+# Vuoto = ~/.local/share/powcon-plus (override: env POWCON_DATA_DIR)
 data_dir = ""
 
 # Evita due copie del daemon (flock su <data_dir>/lock).

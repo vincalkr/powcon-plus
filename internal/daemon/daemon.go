@@ -244,7 +244,7 @@ func (a *App) collect() {
 		a.acc.Add(smp)
 	}
 	paused := a.paused
-	shouldStore := a.cfg.SampleStore && !a.opts.NoStore && !paused &&
+	shouldStore := a.storesHistory() && !paused &&
 		time.Since(a.lastStore) >= a.cfg.SampleEvery.Duration
 	if shouldStore {
 		a.lastStore = time.Now()
@@ -272,8 +272,19 @@ func (a *App) collect() {
 
 func (a *App) pausedKeepState() {}
 
+// persistDaily writes the daily rollups. It is a no-op when history is
+// disabled (same switch as the raw sample files).
 func (a *App) persistDaily() error {
+	if !a.storesHistory() {
+		return nil
+	}
 	return a.st.SaveDaily(a.acc.Days())
+}
+
+// storesHistory reports whether history files (raw samples and daily
+// rollups) are enabled: configuration plus the --no-store flag.
+func (a *App) storesHistory() bool {
+	return a.cfg.SampleStore && !a.opts.NoStore
 }
 
 func (a *App) alertCheck(smp *psu.Sample) {
