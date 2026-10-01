@@ -147,8 +147,7 @@ powcon-plus report --csv | column -t -s,
   contatore di energia. I buchi più grandi di `3 × poll_interval` non vengono
   conteggiati.
 - Nessun cgo nel daemon: tray e notifiche passano da D-Bus
-  (`StatusNotifierItem` + `DBusMenu`). Dettagli e motivazioni in
-  [docs/DISEGNO.md](docs/DISEGNO.md).
+  (`StatusNotifierItem` + `DBusMenu`).
 
 ## Risoluzione problemi
 
