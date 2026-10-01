@@ -34,6 +34,7 @@ Comandi utili mentre si prova:
 ```bash
 ./bin/powcon-plus status           # lettura istantanea (senza daemon funziona)
 ./bin/powcon-plus report --days 7  # kWh e costo per giorno
+./bin/powcon-plus version          # versione corrente
 ./bin/powcon-plus window           # finestra di dettaglio
 ./bin/powcon-plus run --no-tray    # solo raccolta, senza icona
 ```
@@ -41,10 +42,10 @@ Comandi utili mentre si prova:
 ## Avvio automatico
 
 L'autostart si attiva **dall'interfaccia**: nella finestra di dettaglio c'è
-la spunta **Avvio automatico**, e nel menu a destra dell'icona di tray la
-voce **Avvio automatico → All'avvio della sessione**. Entrambi scrivono il
-file XDG usando l'eseguibile attivo, quindi restano coerenti se cambi
-binario.
+la spunta **Avvio automatico**, e nel menu a destra dell'icona di tray c'è
+la voce **Avvio automatico** (spuntata se l'entry è installata). Entrambi
+scrivono il file XDG usando l'eseguibile attivo, quindi restano coerenti se
+cambi binario.
 
 ```bash
 powcon-plus autostart-status       # verifica lo stato
