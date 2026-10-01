@@ -1,12 +1,13 @@
 # powcon-plus — build, test, install
 #
-#   make            bin/powcon-plus (no cgo) + bin/powcon-plus-gui (Fyne)
+#   make            show this help (no arguments)
+#   make all        bin/powcon-plus (no cgo) + bin/powcon-plus-gui (Fyne)
 #   make test       unit tests + vet
-#   make install    copy to ~/.local/bin and write the XDG autostart entry
+#   make install    copy the binaries to ~/.local/bin
 #
 # In an environment without write access to GOPATH/GOCACHE (e.g. an agent
 # sandbox):
-#   . hack/env.sh && make
+#   . hack/env.sh && make <target>
 
 GO      ?= go
 PKG     := ./cmd/powcon-plus
@@ -15,7 +16,28 @@ HEADLESS := $(BIN)/powcon-plus
 GUI      := $(BIN)/powcon-plus-gui
 PREFIX  ?= $(HOME)/.local
 
-.PHONY: all build gui test vet fmt tidy install uninstall install-autostart uninstall-autostart run clean
+.PHONY: help all build gui test vet fmt tidy install uninstall install-autostart uninstall-autostart run clean
+
+# `make` with no arguments shows the help (first target = default).
+help:
+	@echo "powcon-plus — available targets:"
+	@echo
+	@echo "  make                    this help"
+	@echo "  make all                build the headless and the GUI binaries (default build)"
+	@echo "  make build              headless binary only (no cgo)"
+	@echo "  make gui                GUI binary (Fyne, -tags gui)"
+	@echo "  make test               run the unit tests"
+	@echo "  make vet                go vet (both build tag sets)"
+	@echo "  make fmt                check gofmt (prints unformatted files)"
+	@echo "  make tidy               go mod tidy"
+	@echo "  make install            build + copy the binaries to $(PREFIX)/bin"
+	@echo "  make uninstall          remove the binaries from $(PREFIX)/bin"
+	@echo "  make install-autostart  write the XDG autostart entry"
+	@echo "  make uninstall-autostart remove the XDG autostart entry"
+	@echo "  make run                run the daemon in verbose mode (go run)"
+	@echo "  make clean              remove bin/"
+	@echo
+	@echo "Tip: without write access to GOPATH/GOCACHE run first: . hack/env.sh"
 
 all: build gui
 
