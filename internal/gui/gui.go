@@ -42,6 +42,7 @@ import (
 	"powcon-plus/internal/loc"
 	"powcon-plus/internal/psu"
 	"powcon-plus/internal/status"
+	"powcon-plus/internal/version"
 )
 
 // Options for opening the window.
@@ -119,6 +120,7 @@ type windowUI struct {
 	langCaption     *widget.RichText
 	priceCaption    *widget.RichText
 	currencyCaption *widget.RichText
+	aboutBtn        *widget.Button
 	reportBtn       *widget.Button
 	quitBtn         *widget.Button
 
@@ -186,6 +188,7 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 	u.langSel.SetSelected(loc.NameOf(u.langCode))
 	u.syncingLang = false
 
+	u.aboutBtn = widget.NewButton(u.cat.Get("ui.bar.about"), u.showAbout)
 	u.reportBtn = widget.NewButton(u.cat.Get("ui.bar.report"), u.showReport)
 	u.quitBtn = widget.NewButton(u.cat.Get("ui.bar.quit"), func() { u.win.Close() })
 	u.autostart = widget.NewCheck(u.cat.Get("ui.bar.autostart"), u.toggleAutostart)
@@ -198,7 +201,7 @@ func newUI(a fyne.App, w fyne.Window, cfg config.Config, sock string) *windowUI 
 	u.labelCaption = newCaption("Tray icon")
 	u.langCaption = newCaption(u.cat.Get("ui.bar.language"))
 	bar := container.NewHBox(u.pauseBtn, u.labelCaption, u.modeSel,
-		u.autostart, u.langCaption, u.langSel, u.reportBtn, u.quitBtn)
+		u.autostart, u.langCaption, u.langSel, u.aboutBtn, u.reportBtn, u.quitBtn)
 
 	// cost settings: tariff per kWh (in the display currency) and currency
 	u.price = cfg.PricePerKWh
@@ -401,6 +404,7 @@ func (u *windowUI) retranslate() {
 	setCaption(u.langCaption, u.cat.Get("ui.bar.language"))
 	setCaption(u.priceCaption, u.cat.Get("ui.bar.price"))
 	setCaption(u.currencyCaption, u.cat.Get("ui.bar.currency"))
+	u.aboutBtn.SetText(u.cat.Get("ui.bar.about"))
 	u.reportBtn.SetText(u.cat.Get("ui.bar.report"))
 	u.quitBtn.SetText(u.cat.Get("ui.bar.quit"))
 	u.autostart.SetText(u.cat.Get("ui.bar.autostart"))
@@ -706,6 +710,12 @@ func (u *windowUI) toggleAutostart(v bool) {
 			u.autoOn = want
 		})
 	}()
+}
+
+// showAbout shows the version and the developer info.
+func (u *windowUI) showAbout() {
+	body := u.cat.Sprintf("ui.about.body", version.Version, version.Developer, version.Website)
+	dialog.ShowInformation(u.cat.Get("ui.about.title"), body, u.win)
 }
 
 func (u *windowUI) showReport() {

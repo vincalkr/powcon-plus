@@ -32,9 +32,8 @@ import (
 	"powcon-plus/internal/psu"
 	"powcon-plus/internal/status"
 	"powcon-plus/internal/store"
+	"powcon-plus/internal/version"
 )
-
-const version = "0.1.0"
 
 func main() {
 	args := os.Args[1:]
@@ -74,7 +73,7 @@ func main() {
 	case "init-config":
 		err = cmdInitConfig(args)
 	case "version", "--version":
-		fmt.Printf("powcon-plus %s\n", version)
+		fmt.Printf("powcon-plus %s\n", version.Version)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", cmd)
 		usage(os.Stderr)
