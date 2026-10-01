@@ -461,7 +461,7 @@ func (a *App) rebuildMenu() {
 		return
 	}
 	snap := a.snapshot()
-	installed, path := autostart.XDGInstalled()
+	installed, _ := autostart.XDGInstalled()
 	cat := a.catNow()
 	a.item.Menu().Rebuild(func(b *tray.MenuBuilder) {
 		b.Disabled(cat.Sprintf("tray.menu.info", snap.W, snap.TodayWh/1000))
@@ -493,22 +493,19 @@ func (a *App) rebuildMenu() {
 				})
 			}
 		})
-		b.Sub("autostart", cat.Get("tray.menu.autostart"), func(sb *tray.MenuBuilder) {
-			sb.Check("as-xdg", cat.Get("tray.menu.autostart.xdg"), installed, func() {
-				if installed {
-					if _, err := autostart.RemoveXDG(); err != nil {
-						a.log.Printf("removing autostart: %v", err)
-					}
-				} else {
-					if p, err := autostart.InstallXDG("", nil); err != nil {
-						a.log.Printf("installing autostart: %v", err)
-					} else {
-						a.log.Printf("autostart XDG written to %s", p)
-					}
+		b.Check("autostart", cat.Get("tray.menu.autostart"), installed, func() {
+			if installed {
+				if _, err := autostart.RemoveXDG(); err != nil {
+					a.log.Printf("removing autostart: %v", err)
 				}
-				a.rebuildMenu()
-			})
-			sb.Disabled(path)
+			} else {
+				if p, err := autostart.InstallXDG("", nil); err != nil {
+					a.log.Printf("installing autostart: %v", err)
+				} else {
+					a.log.Printf("autostart XDG written to %s", p)
+				}
+			}
+			a.rebuildMenu()
 		})
 		b.Separator()
 		b.Item("save", cat.Get("tray.menu.save"), func() {

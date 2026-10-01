@@ -57,7 +57,6 @@
   "tray.menu.alert.off": "关闭",
   "tray.menu.alert.on": "> %.0f W",
   "tray.menu.autostart": "自动启动",
-  "tray.menu.autostart.xdg": "会话启动时 (XDG)",
   "tray.menu.save": "保存配置",
   "tray.menu.quit": "退出",
   "tray.report.empty": "暂无数据。",

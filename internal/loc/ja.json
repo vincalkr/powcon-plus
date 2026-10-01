@@ -57,7 +57,6 @@
   "tray.menu.alert.off": "無効",
   "tray.menu.alert.on": "> %.0f W",
   "tray.menu.autostart": "自動起動",
-  "tray.menu.autostart.xdg": "セッション起動時 (XDG)",
   "tray.menu.save": "設定を保存",
   "tray.menu.quit": "終了",
   "tray.report.empty": "収集データがありません。",

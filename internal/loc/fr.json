@@ -57,7 +57,6 @@
   "tray.menu.alert.off": "Désactivé",
   "tray.menu.alert.on": "> %.0f W",
   "tray.menu.autostart": "Démarrage automatique",
-  "tray.menu.autostart.xdg": "Au démarrage de la session (XDG)",
   "tray.menu.save": "Enregistrer la configuration",
   "tray.menu.quit": "Quitter",
   "tray.report.empty": "Aucune donnée collectée.",

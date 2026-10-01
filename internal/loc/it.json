@@ -57,7 +57,6 @@
   "tray.menu.alert.off": "Disattivo",
   "tray.menu.alert.on": "> %.0f W",
   "tray.menu.autostart": "Avvio automatico",
-  "tray.menu.autostart.xdg": "All'avvio della sessione (XDG)",
   "tray.menu.save": "Salva configurazione",
   "tray.menu.quit": "Esci",
   "tray.report.empty": "Nessun dato raccolto.",
