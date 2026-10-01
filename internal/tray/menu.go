@@ -22,6 +22,10 @@ type Menu struct {
 	next  int32
 	rev   uint32
 
+	// lastShownRev is the revision the host has seen through AboutToShow:
+	// the host re-fetches the layout only when we report a change there.
+	lastShownRev uint32
+
 	mu sync.Mutex
 }
 
@@ -142,8 +146,13 @@ func (m *Menu) Rebuild(fn func(b *MenuBuilder)) {
 }
 
 func (m *Menu) emitLayoutUpdated(rev uint32) {
-	if err := m.conn.Emit(m.path, ifaceMenu+".LayoutUpdated", rev, int32(0)); err != nil {
-		fmt.Fprintf(os.Stderr, "tray: LayoutUpdated: %v\n", err)
+	// Hosts disagree on the signal name: the Ubuntu AppIndicator extension
+	// listens for LayoutUpdated, the canonical DBusMenu hosts (KDE, XFCE,
+	// swaybar) for LayoutChanged. Emit both so everyone can refresh.
+	for _, name := range []string{ifaceMenu + ".LayoutUpdated", ifaceMenu + ".LayoutChanged"} {
+		if err := m.conn.Emit(m.path, name, rev, int32(0)); err != nil {
+			fmt.Fprintf(os.Stderr, "tray: %s: %v\n", name, err)
+		}
 	}
 }
 
@@ -251,8 +260,17 @@ func (mm *menuMethods) EventGroup(events []menuEvent) ([]int32, *dbus.Error) {
 	return errs, nil
 }
 
+// AboutToShow reports whether the layout changed since the host last asked
+// to show the menu. Hosts re-fetch the layout only when we return true, so
+// without this their cached copy (labels, check marks) would go stale.
 func (mm *menuMethods) AboutToShow(id int32) (bool, *dbus.Error) {
-	return false, nil
+	mm.m.mu.Lock()
+	changed := mm.m.rev != mm.m.lastShownRev
+	if changed {
+		mm.m.lastShownRev = mm.m.rev
+	}
+	mm.m.mu.Unlock()
+	return changed, nil
 }
 
 func (mm *menuMethods) AboutToShowGroup(ids []int32) ([]int32, []int32, *dbus.Error) {
