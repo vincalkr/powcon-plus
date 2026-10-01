@@ -50,8 +50,6 @@
   "tray.menu.window": "打开功耗详情",
   "tray.menu.report": "报告（通知）",
   "tray.menu.report.title": "最近 7 天报告",
-  "tray.menu.pause": "暂停采集",
-  "tray.menu.resume": "恢复采集",
   "tray.menu.mode": "栏中标签",
   "tray.menu.mode.power": "功率 (W)",
   "tray.menu.mode.energy": "今日能量 (Wh/kWh)",

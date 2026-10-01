@@ -50,8 +50,6 @@
   "tray.menu.window": "Open consumption details",
   "tray.menu.report": "Report (notification)",
   "tray.menu.report.title": "Last 7 days report",
-  "tray.menu.pause": "Pause collection",
-  "tray.menu.resume": "Resume collection",
   "tray.menu.mode": "Label in the bar",
   "tray.menu.mode.power": "Power (W)",
   "tray.menu.mode.energy": "Today's energy (Wh/kWh)",

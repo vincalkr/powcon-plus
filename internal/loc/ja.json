@@ -50,8 +50,6 @@
   "tray.menu.window": "消費電力の詳細を開く",
   "tray.menu.report": "レポート（通知）",
   "tray.menu.report.title": "直近 7 日のレポート",
-  "tray.menu.pause": "収集を一時停止",
-  "tray.menu.resume": "収集を再開",
   "tray.menu.mode": "バー上のラベル",
   "tray.menu.mode.power": "電力 (W)",
   "tray.menu.mode.energy": "今日のエネルギー (Wh/kWh)",

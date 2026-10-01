@@ -50,8 +50,6 @@
   "tray.menu.window": "Abrir detalles de consumo",
   "tray.menu.report": "Informe (notificación)",
   "tray.menu.report.title": "Informe de los últimos 7 días",
-  "tray.menu.pause": "Pausar la recogida",
-  "tray.menu.resume": "Reanudar la recogida",
   "tray.menu.mode": "Etiqueta en la barra",
   "tray.menu.mode.power": "Potencia (W)",
   "tray.menu.mode.energy": "Energía de hoy (Wh/kWh)",

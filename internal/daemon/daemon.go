@@ -470,12 +470,6 @@ func (a *App) rebuildMenu() {
 		b.Item("report", cat.Get("tray.menu.report"), func() {
 			notify.Send("powcon-plus", cat.Get("tray.menu.report.title"), a.reportText(7), 0)
 		})
-		// The label mirrors the state: while paused it offers the resume.
-		pauseLabel := cat.Get("tray.menu.pause")
-		if snap.Paused {
-			pauseLabel = cat.Get("tray.menu.resume")
-		}
-		b.Check("pause", pauseLabel, snap.Paused, func() { a.togglePause() })
 		b.Sub("mode", cat.Get("tray.menu.mode"), func(sb *tray.MenuBuilder) {
 			sb.Radio("mode-power", cat.Get("tray.menu.mode.power"), snap.LabelMode == config.ModePower,
 				func() { a.setLabelMode(config.ModePower) })

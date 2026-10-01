@@ -48,8 +48,7 @@ hwmon8 ─┼─► lettura canali ──► integrazione Wh ──────�
         │  internal/tray  SNI + DBusMenu (godbus)                                      │      │
         │   • icona (pixmap ARGB32)                                                    │      │
         │   • XAyatanaLabel → testo in barra GNOME                                     │      │
-        │   • menu: finestra, report, pausa/riprendi, etichetta, soglia,               │      │
-        │           autostart, salva, esci                                             │      │
+        │   • menu: finestra, report, etichetta, soglia, autostart, salva, esci        │      │
         └──────────────────────────────────────────────────────────────────────────────┘────┘
                                         │  subscribe (stream 1 Hz)
                                         ▼
