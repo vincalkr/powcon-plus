@@ -28,7 +28,6 @@ import (
 	"powcon-plus/internal/status"
 	"powcon-plus/internal/store"
 	"powcon-plus/internal/tray"
-	"powcon-plus/internal/version"
 )
 
 // Startup options.
@@ -471,11 +470,12 @@ func (a *App) rebuildMenu() {
 		b.Item("report", cat.Get("tray.menu.report"), func() {
 			notify.Send("powcon-plus", cat.Get("tray.menu.report.title"), a.reportText(7), 0)
 		})
-		b.Item("about", cat.Get("tray.menu.about"), func() {
-			notify.Send("powcon-plus", cat.Get("ui.about.title"),
-				cat.Sprintf("ui.about.body", version.Version, version.Developer, version.Website), 0)
-		})
-		b.Check("pause", cat.Get("tray.menu.pause"), snap.Paused, func() { a.togglePause() })
+		// The label mirrors the state: while paused it offers the resume.
+		pauseLabel := cat.Get("tray.menu.pause")
+		if snap.Paused {
+			pauseLabel = cat.Get("tray.menu.resume")
+		}
+		b.Check("pause", pauseLabel, snap.Paused, func() { a.togglePause() })
 		b.Sub("mode", cat.Get("tray.menu.mode"), func(sb *tray.MenuBuilder) {
 			sb.Radio("mode-power", cat.Get("tray.menu.mode.power"), snap.LabelMode == config.ModePower,
 				func() { a.setLabelMode(config.ModePower) })
