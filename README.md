@@ -1,80 +1,92 @@
 # powcon-plus
 
-Quanto consuma la workstation? Il mio Corsair HX1200i lo dice, c'è il driver
-`corsairpsu` nel kernel che lo legge via USB. Il problema è che `watch -n 1
-sensors corsairpsu-hid-3-4` non è una cosa che tieni aperta: quindi questo
-programma sta nell'icona di tray con potenza e kWh di oggi, somma i Wh della
-giornata e li tiene su disco.
+Monitoraggio di potenza ed energia della workstation a partire dai dati
+rilevati dall'alimentatore **Corsair HX1200i**, esposti dal driver kernel
+`corsairpsu` tramite hwmon.
 
-Nella barra di GNOME si vede tipo `148 W · 2.4 kWh` accanto all'icona.
+Il programma resta residente: pubblica potenza e consumo giornaliero
+accanto all'icona di tray, integra i Wh della giornata e li conserva su
+disco. Una finestra di dettaglio offre grafico in tempo reale, tensioni,
+temperature e riepilogo per giorno.
+
+Nella barra di GNOME l'etichetta assume una forma come `148 W · 2.4 kWh`.
 
 ## Requisiti
 
-- Linux, modulo kernel `corsairpsu` (nei kernel recenti c'è) e il **cavo USB
-  del PSU collegato**. Se `sensors` non elenca `corsairpsu-hid-3-4` qui non
-  c'è niente da fare.
-- Go 1.24 o superiore per compilare (io uso 1.26).
-- Un tray che parli SNI: GNOME con l'estensione AppIndicator (su Ubuntu è già
-  attiva), KDE, XFCE, Hyprland, swaybar.
-- Per la finestra di dettaglio servono anche le librerie OpenGL/X11:
-  `libgl1-mesa-dev libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev
-  libxkbcommon-dev`.
+- Linux con modulo kernel `corsairpsu` (presente dai kernel recenti) e cavo
+  USB dell'alimentatore collegato. Il prerequisito si verifica con `sensors`:
+  deve comparire il chip `corsairpsu-hid-3-4`.
+- Go 1.24 o superiore per la compilazione (sviluppato e testato con 1.26).
+- Un system tray che implementi il protocollo StatusNotifierItem: GNOME con
+  estensione AppIndicator (già attiva su Ubuntu,
+  `ubuntu-appindicators@ubuntu.com`), KDE, XFCE, Hyprland, swaybar.
+- Per la sola finestra di dettaglio sono richieste le librerie OpenGL/X11:
+  `libgl1-mesa-dev`, `libx11-dev`, `libxcursor-dev`, `libxrandr-dev`,
+  `libxinerama-dev`, `libxkbcommon-dev`.
 
-## Compilare e avviare
+## Compilazione e avvio
 
 ```bash
-make all                       # bin/powcon-plus + bin/powcon-plus-gui
-./bin/powcon-plus-gui run      # daemon + icona di tray
+make all                    # bin/powcon-plus + bin/powcon-plus-gui
+./bin/powcon-plus-gui run   # daemon con icona di tray
 ```
 
-`make` da solo stampa l'elenco dei target.
+Invocare `make` senza argomenti produce l'elenco dei target disponibili.
 
-Mentre provi, questi tornano comodi:
+Comandi di utilità durante la prova:
 
 ```bash
-./bin/powcon-plus status           # lettura al volo, funziona anche senza daemon
+./bin/powcon-plus status           # lettura immediata, funziona anche senza daemon
 ./bin/powcon-plus report --days 7  # kWh e costo per giorno
 ./bin/powcon-plus window           # finestra di dettaglio
-./bin/powcon-plus run --no-tray    # raccoglie e basta, senza icona
-./bin/powcon-plus version          # versione
+./bin/powcon-plus run --no-tray    # sola raccolta dati, senza icona
+./bin/powcon-plus version          # versione installata
 ```
 
-## L'icona di tray
+## Icona di tray
 
-Click sinistro apre la finestra. Click centrale o rotellina cambiano cosa
-scrive il testo accanto all'icona (watt, energia di oggi, entrambi, solo
-l'icona). Tasto destro apre il menu: finestra, report, etichetta, soglia
-avviso, avvio automatico, esci.
+| Interazione | Effetto |
+|---|---|
+| Click sinistro | apre la finestra di dettaglio |
+| Click centrale o rotellina | alterna il contenuto dell'etichetta: potenza, energia del giorno, entrambi, sola icona |
+| Click destro | menu: finestra, report, etichetta, soglia avviso, avvio automatico, esci |
 
-Il testo usa la proprietà Ayatana `XAyatanaLabel`. Su GNOME/Ubuntu e KDE si
-vede sempre, su altri compositori può capitare che compaia solo nel tooltip;
-in quel caso metti `label_mode = "none"` e leggi il tooltip.
+L'etichetta accanto all'icona utilizza la proprietà Ayatana
+`XAyatanaLabel`. Su GNOME/Ubuntu e KDE è sempre visibile; su altri
+compositori può comparire soltanto nel tooltip. In quel caso conviene
+impostare `label_mode = "none"` e leggere il tooltip.
 
-L'icona è disegnata dal programma (un fulmine, in tre colori a seconda che
-stia raccogliendo, sia in pausa o abbia perso il sensore). Se preferisci
-un'icona del tema imposta `icon_mode = "name"` e `icon_name = "powersupply"`,
-però in quella modalità il colore non cambia più con lo stato.
+L'icona è generata dal programma (un fulmine) e assume colore diverso a
+seconda che la raccolta sia attiva, sospesa o che il sensore sia stato
+perso. In alternativa è possibile usare un'icona del tema impostando
+`icon_mode = "name"` e `icon_name` (ad esempio `powersupply`): in questa
+modalità l'icona non cambia più colore con lo stato.
 
-## La finestra
+## Finestra di dettaglio
 
-In alto, da sinistra: il pulsante pausa/riprendi la raccolta, la select di
-cosa mostra l'icona di tray, la spunta avvio automatico, la select lingua,
-il campo costo/kWh con la moneta, Info (versione e sviluppatore), Report,
-Esci. Sotto: lo stato del daemon, la potenza in grande, il grafico degli
-ultimi 30 minuti, i valori di rail/12V/5V/3.3V/temperature/ventola e la
-tabella dei giorni.
+La barra superiore contiene, da sinistra: pulsante di pausa/ripresa della
+raccolta, selettore del contenuto dell'etichetta di tray, spunta di avvio
+automatico, selettore lingua, campo costo/kWh con relativo selettore di
+moneta, pulsante Info (versione e sviluppatore), Report, Esci.
 
-Il costo è una stima: la tariffa la inserisci tu nel campo costo/kWh, e la
-moneta (EUR, USD, GBP, CNY, JPY) serve solo per il simbolo e per etichettare
-il numero — non c'è nessun cambio. Il valore viene salvato in configurazione.
+Sotto la barra sono presenti lo stato del daemon, la potenza di lettura,
+il grafico degli ultimi 30 minuti, i valori di tensioni e temperature, la
+ventola e la tabella dei giorni.
 
-La pausa la comandi solo da qui: nel menu di tray non c'è, perché l'estensione
-AppIndicator di GNOME non rinfresca i label del menu e la voce sarebbe sempre
-vecchia. Quando sei in pausa l'icona cambia colore, quello sì.
+Il costo riportato è una stima: la tariffa viene inserita dall'utente nel
+campo costo/kWh. Il selettore di moneta (EUR, USD, GBP, CNY, JPY) determina
+solo il simbolo e l'etichetta del valore, senza alcuna conversione di
+cambio. Il valore inserito viene persistito nella configurazione.
+
+La pausa della raccolta è disponibile solo nella finestra. Nel menu di
+tray è stata eliminata perché l'estensione AppIndicator di GNOME non
+aggiorna le etichette del menu, che resterebbero incoerenti con lo stato.
+Il cambio di stato resta visibile dal colore dell'icona.
 
 ## Avvio automatico
 
-O la spunta dalla finestra (o dal menu di tray), o da CLI:
+L'attivazione avviene dalla finestra di dettaglio o dalla voce nel menu di
+tray, oppure da riga di comando:
 
 ```bash
 powcon-plus autostart-status
@@ -82,11 +94,14 @@ powcon-plus install-autostart      # scrive ~/.config/autostart/powcon-plus.desk
 powcon-plus uninstall-autostart
 ```
 
-L'entry viene scritta con l'eseguibile che sta girando in quel momento, così
-se cambi binario resta tutto coerente. Parte con la sessione grafica, che è
-quello che serve al tray. Se preferisci systemd c'è `--mode systemd`: unit
-utente agganciata a `graphical-session.target`, log su
-`journalctl --user -u powcon-plus`. Un flock impedisce che partano due copie.
+La desktop entry viene scritta puntando all'eseguibile in uso al momento,
+così resta coerente dopo un aggiornamento del binario. L'entry XDG parte
+con la sessione grafica, condizione necessaria per l'icona di tray.
+
+In alternativa è disponibile un'unit systemd utente con
+`--mode systemd`, agganciata a `graphical-session.target`; i log si
+leggono con `journalctl --user -u powcon-plus`. Un flock impedisce l'avvio
+di più istanze.
 
 ## Installazione
 
@@ -94,101 +109,107 @@ utente agganciata a `graphical-session.target`, log su
 make install    # copia i due binari in ~/.local/bin
 ```
 
-`powcon-plus` è il daemon senza cgo, piccolo e portabile. `powcon-plus-gui`
-è lo stesso programma compilato con la finestra (tag `gui`): è quello da
-mettere in avvio automatico, perché un solo binario fa sia daemon sia finestra.
+`powcon-plus` è il daemon compilato senza cgo, di dimensioni ridotte e
+portabile. `powcon-plus-gui` è lo stesso programma compilato con il tag
+`gui`, che include anche la finestra: è il binario da destinare
+all'avvio automatico, poiché un solo eseguibile svolge sia il ruolo di
+daemon sia quello di finestra.
 
-Per togliere tutto:
+Disinstallazione:
 
 ```bash
-powcon-plus uninstall          # daemon, autostart, binari
-powcon-plus uninstall --purge  # e anche dati e configurazione
+powcon-plus uninstall          # arresta il daemon, rimuove autostart e binari
+powcon-plus uninstall --purge  # rimuove anche dati e configurazione
 ```
 
-Senza `--purge` dati e configurazione restano, quindi se reinstalli ritrovi
-lo storico.
+Senza `--purge` dati e configurazione vengono conservati, quindi una
+successiva installazione ritrova lo storico.
 
 ## Configurazione
 
-`~/.config/powcon-plus/config.toml`, da creare con `powcon-plus init-config`.
-Le chiavi complete sono in [docs/config.example.toml](docs/config.example.toml);
-quelle che si toccano di solito:
+Il file è `~/.config/powcon-plus/config.toml`, generabile con
+`powcon-plus init-config`. L'elenco completo delle chiavi con descrizione
+si trova in [docs/config.example.toml](docs/config.example.toml). Le più
+rilevanti:
 
 ```toml
 label_mode = "power"        # power | energy | both | none
-poll_interval = "1s"        # sotto 200ms non ha senso, il PSU aggrega ~1s
-price_per_kwh = 0.25        # la tua tariffa
+poll_interval = "1s"        # sotto i 200ms non ha senso: il PSU aggrega ~1s
+price_per_kwh = 0.25        # tariffa per la stima del costo
 currency = ""               # EUR | USD | GBP | CNY | JPY; vuoto = segue la lingua
-alert_power_w = 800         # notifica se resti sopra questa soglia (0 = off)
+alert_power_w = 800         # notifica al superamento prolungato della soglia (0 = disattivo)
 alert_sustain = "15s"
-sample_store = true         # false = non scrivere nessuno storico
+sample_store = true         # false = nessuna scrittura dello storico
 sample_interval = "10s"
-retention_days = 31         # giorni di campioni crudi da tenere
+retention_days = 31         # giorni di campioni grezzi da conservare
 data_dir = ""               # vuoto = ~/.local/share/powcon-plus
-sensor = ""                 # vuoto = auto-detect; es. "hwmon8" per forzare
+sensor = ""                 # vuoto = auto-rilevamento; es. "hwmon8" per forzare
 language = ""               # it | en | de | fr | es | zh | ja; vuoto = dalla locale
 ```
 
-`both` nell'etichetta dà `148 W · 2.41 kWh`; con `energy` sotto 1 kWh mostra i
-Wh (`340 Wh`).
+Con `label_mode = "both"` l'etichetta assume una forma come
+`148 W · 2.41 kWh`; con `energy`, sotto 1 kWh, vengono mostrati i Wh
+(`340 Wh`).
 
-La lingua copre finestra, menu di tray e notifiche. Se il campo è vuoto viene
-dalla locale del sistema (con fallback inglese) e si può cambiare al volo
-dalla select nella finestra, che poi la salva.
+La lingua si applica a finestra, menu di tray e notifiche. Se il campo è
+vuoto viene determinata dalla locale di sistema, con fallback inglese. Può
+essere modificata in tempo reale dal selettore nella finestra; la scelta
+viene salvata in configurazione.
 
-Se `sample_store = false` non viene scritto nessun file di storico: restano
-solo il lock e il socket. La tabella e il report mostrano quindi solo la
-sessione corrente.
+Con `sample_store = false` non viene scritto alcun file di storico: nella
+cartella restano solo il lock e il socket. Tabella e report mostrano
+quindi esclusivamente i dati della sessione corrente.
 
-## I file
+## File prodotti
 
 ```
 ~/.local/share/powcon-plus/daily.json                 riepiloghi per giorno
-~/.local/share/powcon-plus/samples-2026-09-30.jsonl   campioni grezzi, uno al giorno
-~/.local/share/powcon-plus/control.sock               controllo del daemon
+~/.local/share/powcon-plus/samples-2026-09-30.jsonl   campioni grezzi, un file per giorno
+~/.local/share/powcon-plus/control.sock               socket di controllo del daemon
 ```
 
-Per curiosarci dentro:
+Esempi di analisi:
 
 ```bash
 jq -s 'map(.w) | add/length' ~/.local/share/powcon-plus/samples-$(date +%F).jsonl
 powcon-plus report --csv | column -t -s,
 ```
 
-## Come funziona sotto
+## Architettura
 
-Legge `/sys/class/hwmon/hwmonN` dove `name = corsairpsu`, e risolve i canali
-dalle **etichette** del driver, non dagli indici: gli indici cambiano tra le
-versioni del driver, le label no.
+La lettura avviene da `/sys/class/hwmon/hwmonN` con `name = corsairpsu`.
+I canali sono risolti a partire dalle **etichette** esposte dal driver e
+non dagli indici, che variano tra le versioni del driver stesso.
 
-Il PSU non ha un contatore di energia, quindi i Wh se li fa il programma
-integrando la potenza col metodo del trapezio. Se il buco tra due letture è
-più grande di `3 × poll_interval` quel tratto viene saltato, altrimenti una
-sospensione del PC si trasformerebbe in kWh inventati.
+L'alimentatore non espone un contatore di energia: i Wh sono integrati
+dalla potenza con metodo del trapezio. Gli intervalli tra due letture
+superiori a `3 × poll_interval` vengono esclusi dall'integrazione, per non
+attribuire consumo a periodi in cui il PC era sospeso o il daemon fermo.
 
-Il daemon non usa cgo: tray e notifiche passano da D-Bus (`StatusNotifierItem`
-+ `DBusMenu`), così il binario resta piccolo e si può cross-compilare. La
-finestra invece è Fyne, e per quello serve il tag `gui`.
+Il daemon non utilizza cgo: tray e notifiche passano attraverso D-Bus
+(`StatusNotifierItem` e `DBusMenu`), così il binario resta di piccole
+dimensioni e cross-compilabile. La finestra è realizzata con Fyne e
+richiede il tag di compilazione `gui`.
 
-La versione sta in `internal/version`, unica fonte per `powcon-plus version` e
-per il dialog Info.
+La versione è definita in `internal/version`, unica origine per il comando
+`powcon-plus version` e per il dialog Info della finestra.
 
-## Se qualcosa non va
+## Risoluzione dei problemi
 
-| Sintomo | Di solito è |
+| Sintomo | Causa più probabile |
 |---|---|
-| `sensore corsairpsu non disponibile` | cavo USB scollegato, modulo non caricato, oppure OpenLinkHub/liquidctl/iCUE si è preso il device (in quel caso l'hwmon sparisce del tutto) |
-| l'icona non c'è ma il daemon gira | estensione AppIndicator disattivata, o sessione senza bus grafico (ssh, service systemd globale) |
-| il testo non si vede nella barra | il desktop non supporta `XAyatanaLabel`: `label_mode = "none"` e leggi il tooltip |
-| `daemon non in esecuzione` da `ctl` | il socket è `~/.local/share/powcon-plus/control.sock`: guarda permessi e che il daemon ci sia davvero |
-| consumi strani o lotte sul device | due copie del daemon: il flock dovrebbe evitarlo, controlla con `pgrep -af powcon-plus` |
+| `sensore corsairpsu non disponibile` | cavo USB scollegato, modulo non caricato, oppure OpenLinkHub/liquidctl/iCUE ha acquisito il device (in tal caso il nodo hwmon scompare) |
+| Icona assente pur con daemon in esecuzione | estensione AppIndicator disattivata, oppure sessione priva di bus grafico (connessione ssh, service systemd globale) |
+| Etichetta non visibile nella barra | desktop senza supporto `XAyatanaLabel`: impostare `label_mode = "none"` e fare riferimento al tooltip |
+| `daemon non in esecuzione` dai comandi `ctl` | verificare che il daemon sia attivo e i permessi su `~/.local/share/powcon-plus/control.sock` |
+| Letture incoerenti o accesso concorrente al device | più istanze del daemon: il flock dovrebbe escluderle, verificare con `pgrep -af powcon-plus` |
 
 ## Test
 
 ```bash
-make test     # unit test, con e senza tag gui
+make test     # test unitari, con e senza tag gui
 make vet fmt
 ```
 
-I test che girano il giro completo SNI/DBusMenu si saltano da soli se non
-c'è un bus di sessione disponibile.
+I test che esercitano il giro completo SNI/DBusMenu vengono saltati
+automaticamente in assenza di un bus di sessione.
