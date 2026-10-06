@@ -1045,11 +1045,13 @@ func (r *chartRenderer) Layout(size fyne.Size) {
 	top := maxW * 1.15
 
 	xOf := func(t time.Time) float32 {
+		// t.Sub(end) is negative (end is the newest sample): it runs from
+		// -span at the left edge to 0 at the right edge.
 		f := float64(t.Sub(end)) / float64(c.span)
-		if f < 0 {
-			f = 0
+		if f < -1 {
+			f = -1
 		}
-		return padL + float32(f)*plotW
+		return padL + float32(1+f)*plotW
 	}
 	yOf := func(v float64) float32 {
 		return h - padB - float32(v/top)*plotH

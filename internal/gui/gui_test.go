@@ -183,3 +183,42 @@ func TestPowerChartEmptyHistoryNoPanic(t *testing.T) {
 	}
 	r.Destroy()
 }
+
+// The series must spread across the plot: a past regression clamped every
+// x to the left axis, collapsing the chart into a vertical line.
+func TestPowerChartSpreadsSeriesHorizontally(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+
+	c := newPowerChart()
+	now := time.Now()
+	series := make([]energy.Sample, 0, 60)
+	for i := 0; i < 60; i++ {
+		series = append(series, energy.Sample{
+			Time: now.Add(-time.Duration(60-i) * 20 * time.Second),
+			W:    float64(100 + i),
+		})
+	}
+	c.SetSeries(series, 0)
+
+	r := c.CreateRenderer().(*chartRenderer)
+	size := fyne.NewSize(700, 160)
+	r.Layout(size)
+
+	var minX, maxX float32 = 1e9, -1e9
+	for _, l := range r.lines {
+		if l.Position1.X < minX {
+			minX = l.Position1.X
+		}
+		if l.Position2.X > maxX {
+			maxX = l.Position2.X
+		}
+	}
+	if maxX-minX < size.Width*0.5 {
+		t.Errorf("series spans only %.0f px of %.0f: chart collapsed on the axis",
+			maxX-minX, size.Width)
+	}
+	if maxX > size.Width {
+		t.Errorf("series overflows the widget: maxX = %.0f", maxX)
+	}
+}
