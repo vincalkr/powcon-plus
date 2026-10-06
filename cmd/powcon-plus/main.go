@@ -28,6 +28,7 @@ import (
 	"powcon-plus/internal/ctl"
 	"powcon-plus/internal/currency"
 	"powcon-plus/internal/daemon"
+	"powcon-plus/internal/deps"
 	"powcon-plus/internal/energy"
 	"powcon-plus/internal/psu"
 	"powcon-plus/internal/status"
@@ -62,6 +63,8 @@ func main() {
 		err = cmdCtl(args)
 	case "sensors":
 		err = cmdSensors(args)
+	case "check", "doctor":
+		err = cmdCheck(args)
 	case "install-autostart":
 		err = cmdInstallAutostart(args)
 	case "uninstall-autostart":
@@ -97,6 +100,9 @@ Usage:
   powcon-plus ctl <cmd> [k=v...]     control the daemon
                                       (status|config|pause|resume|label-mode|alert|ui-language|price|autostart-status|autostart-set enabled=1|quit)
   powcon-plus sensors                list the detected PSU hwmon channels
+  powcon-plus check [--build]        verify the system dependencies (sensor, tray,
+                                      libraries) and print how to install what is
+                                      missing; --build also checks the toolchain
   powcon-plus install-autostart [--mode xdg|systemd]
   powcon-plus uninstall-autostart
   powcon-plus uninstall [--purge]    stop the daemon, remove autostart and binaries;
@@ -314,6 +320,33 @@ func cmdSensors(args []string) error {
 		fmt.Printf("  %-10s %s\n", k, rd.Labels[k])
 	}
 	return nil
+}
+
+// cmdCheck verifies the system dependencies and prints how to install what is
+// missing. It returns an error when something essential is absent, so that a
+// script can stop on it.
+func cmdCheck(args []string) error {
+	fs := flag.NewFlagSet("check", flag.ContinueOnError)
+	build := fs.Bool("build", false, "also check the toolchain needed to compile")
+	gui := fs.String("gui", "", "GUI binary to inspect for unresolved libraries")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	fmt.Printf("powcon-plus %s - system dependencies\n\n", version.Version)
+
+	found := deps.Check(deps.Options{Build: *build, GUIBinary: *gui})
+	deps.Report(os.Stdout, found)
+
+	missing := deps.MissingEssential(found)
+	if len(missing) == 0 {
+		fmt.Println("\nready: nothing essential is missing")
+		return nil
+	}
+	names := make([]string, 0, len(missing))
+	for _, f := range missing {
+		names = append(names, f.Name)
+	}
+	return fmt.Errorf("missing essential dependencies: %s", strings.Join(names, ", "))
 }
 
 func cmdCtl(args []string) error {

@@ -24,6 +24,22 @@ In the GNOME top bar the label takes a form such as `148 W · 2.4 kWh`.
   `libgl1-mesa-dev`, `libx11-dev`, `libxcursor-dev`, `libxrandr-dev`,
   `libxinerama-dev`, `libxkbcommon-dev`.
 
+## Checking the dependencies
+
+```bash
+powcon-plus check            # sensor, session bus, tray host, GUI libraries
+powcon-plus check --build    # also the toolchain needed to compile
+```
+
+The check probes the host and, for anything missing, prints the command that
+installs or enables it; the package manager is detected automatically (apt,
+dnf, pacman, zypper). The GUI libraries are read from the built binary through
+the loader, so the report reflects what that binary actually needs.
+
+Findings marked `missing*` are essential: the command exits with a non-zero
+status when one is present, so a script can stop on it. Everything else is a
+warning — the daemon and the tray work without the window libraries.
+
 ## Build and start
 
 ```bash
