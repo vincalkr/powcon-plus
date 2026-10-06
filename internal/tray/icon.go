@@ -1,7 +1,6 @@
 package tray
 
 import (
-	"encoding/binary"
 	"image"
 	"image/color"
 )
@@ -133,13 +132,4 @@ func PixmapToPNG(p Pixmap) image.Image {
 		img.SetNRGBA(i%int(p.W), i/int(p.W), color.NRGBA{R: r, G: g, B: b, A: a})
 	}
 	return img
-}
-
-// EnsureBigEndian is a documentary check: the data is in network byte order.
-func EnsureBigEndian(p Pixmap) bool {
-	if len(p.Data) < 4 {
-		return false
-	}
-	_ = binary.BigEndian
-	return true
 }

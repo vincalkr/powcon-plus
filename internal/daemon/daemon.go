@@ -362,7 +362,7 @@ func (a *App) runTray() {
 	a.item = item
 	pal := tray.DefaultPalette()
 	item.SetPalette(pal)
-	item.SetIconState(tray.StateNormal)
+	a.applyIcon()
 	item.OnActivate(func(x, y int32) { a.launchWindow() })
 	item.OnSecondaryActivate(func(x, y int32) { a.cycleLabel() })
 	item.OnScroll(func(delta int32, orientation string) { a.cycleLabel() })
@@ -427,6 +427,17 @@ func (a *App) refreshTray(smp *psu.Sample) {
 	} else {
 		a.item.SetLabel(cat.Get("tray.offline.label"))
 		a.item.SetToolTip(cat.Get("tray.title"), cat.Get("tray.offline.tooltip"))
+	}
+	a.applyIcon()
+}
+
+// applyIcon publishes the tray glyph. With icon_mode = "name" the icon comes
+// from the desktop theme (a static glyph, so the state cannot recolour it);
+// otherwise the generated pixmap reflects the state.
+func (a *App) applyIcon() {
+	if a.cfg.IconMode == "name" {
+		a.item.SetIconName(a.cfg.IconName, "")
+		return
 	}
 	switch {
 	case a.sensorLost:
@@ -507,11 +518,6 @@ func (a *App) rebuildMenu() {
 			a.rebuildMenu()
 		})
 		b.Separator()
-		b.Item("save", cat.Get("tray.menu.save"), func() {
-			if err := config.Save(a.cfgPath, a.effectiveConfig()); err != nil {
-				a.log.Printf("saving configuration: %v", err)
-			}
-		})
 		b.Item("quit", cat.Get("tray.menu.quit"), func() { a.Stop() })
 	})
 }
@@ -552,18 +558,6 @@ func (a *App) effectiveConfig() config.Config {
 }
 
 // --- commands ---
-
-func (a *App) togglePause() {
-	a.mu.Lock()
-	a.paused = !a.paused
-	paused := a.paused
-	a.mu.Unlock()
-	a.refreshTray(a.lastSample())
-	a.rebuildMenu()
-	if a.opts.Verbose {
-		a.log.Printf("collection: paused=%v", paused)
-	}
-}
 
 func (a *App) setLabelMode(m config.LabelMode) {
 	a.mu.Lock()
@@ -724,14 +718,7 @@ func (a *App) registerCtl(s *ctl.Server) {
 		go a.Stop()
 		return map[string]any{"ok": true}, nil
 	})
-	s.Handle("menu-refresh", func(map[string]any) (any, error) {
-		a.rebuildMenu()
-		return nil, nil
-	})
 	s.Handle("config", func(map[string]any) (any, error) { return a.effectiveConfig(), nil })
-	s.Handle("save-config", func(map[string]any) (any, error) {
-		return nil, config.Save(a.cfgPath, a.effectiveConfig())
-	})
 	s.Handle("ui-language", func(args map[string]any) (any, error) {
 		lang, _ := args["language"].(string)
 		if !loc.IsValid(lang) {
@@ -843,5 +830,3 @@ func mustMarshal(s status.Snapshot) json.RawMessage {
 	}
 	return b
 }
-
-var _ = json.Marshal

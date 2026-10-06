@@ -2,7 +2,7 @@
 #
 #   make            show this help (no arguments)
 #   make all        bin/powcon-plus (no cgo) + bin/powcon-plus-gui (Fyne)
-#   make test       unit tests + vet
+#   make test       unit tests (headless and gui tag sets)
 #   make install    copy the binaries to ~/.local/bin
 #
 # In an environment without write access to GOPATH/GOCACHE (e.g. an agent
@@ -45,17 +45,18 @@ build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w" -o $(HEADLESS) $(PKG)
 
 gui:
-	$(GO) build -trimpath -tags gui -o $(GUI) $(PKG)
+	$(GO) build -trimpath -tags gui -ldflags "-s -w" -o $(GUI) $(PKG)
 
 test:
 	$(GO) test ./...
+	$(GO) test -tags gui ./...
 
 vet:
 	$(GO) vet ./...
 	$(GO) vet -tags gui ./...
 
 fmt:
-	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "run: gofmt -w ."; exit 1)
+	@test -z "$$(gofmt -l cmd internal)" || (gofmt -l cmd internal && echo "run: gofmt -w cmd internal"; exit 1)
 
 tidy:
 	$(GO) mod tidy

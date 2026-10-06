@@ -205,17 +205,23 @@ func (it *Item) SetIcon(px []Pixmap) {
 	it.emitProps(changed)
 }
 
-// SetIconName uses a theme icon (as an alternative to pixmaps).
+// SetIconName uses a theme icon (as an alternative to pixmaps). It is a
+// no-op when nothing changed, so callers may invoke it on every refresh.
 func (it *Item) SetIconName(name, themePath string) {
 	it.mu.Lock()
-	it.props["IconName"] = dbus.MakeVariant(name)
-	it.props["IconThemePath"] = dbus.MakeVariant(themePath)
-	changed := map[string]dbus.Variant{
-		"IconName":      dbus.MakeVariant(name),
-		"IconThemePath": dbus.MakeVariant(themePath),
+	changed := map[string]dbus.Variant{}
+	if v := it.props["IconName"]; v.String() != dbus.MakeVariant(name).String() {
+		it.props["IconName"] = dbus.MakeVariant(name)
+		changed["IconName"] = dbus.MakeVariant(name)
+	}
+	if v := it.props["IconThemePath"]; v.String() != dbus.MakeVariant(themePath).String() {
+		it.props["IconThemePath"] = dbus.MakeVariant(themePath)
+		changed["IconThemePath"] = dbus.MakeVariant(themePath)
 	}
 	it.mu.Unlock()
-	it.emitProps(changed)
+	if len(changed) > 0 {
+		it.emitProps(changed)
+	}
 }
 
 // SetStatus sets Active/Passive/NeedsAttention.

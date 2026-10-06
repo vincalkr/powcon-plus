@@ -95,7 +95,7 @@ Usage:
                                      per-day kWh/cost summary
   powcon-plus window                 detail window (gui-tagged build)
   powcon-plus ctl <cmd> [k=v...]     control the daemon
-                                      (status|pause|resume|label-mode|alert|ui-language|price|autostart-status|autostart-set enabled=1|quit)
+                                      (status|config|pause|resume|label-mode|alert|ui-language|price|autostart-status|autostart-set enabled=1|quit)
   powcon-plus sensors                list the detected PSU hwmon channels
   powcon-plus install-autostart [--mode xdg|systemd]
   powcon-plus uninstall-autostart
@@ -318,7 +318,7 @@ func cmdSensors(args []string) error {
 
 func cmdCtl(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: powcon-plus ctl <cmd> [k=v ...] (status|pause|resume|label-mode|alert|ui-language|price|autostart-status|autostart-set enabled=1|quit)")
+		return fmt.Errorf("usage: powcon-plus ctl <cmd> [k=v ...] (status|config|pause|resume|label-mode|alert|ui-language|price|autostart-status|autostart-set enabled=1|quit)")
 	}
 	cfg, err := config.Load("")
 	if err != nil {
