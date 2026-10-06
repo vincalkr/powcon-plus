@@ -65,7 +65,7 @@ Commands that are useful while testing:
 |---|---|
 | Left click | opens the detail window |
 | Middle click or scroll wheel | cycles the label content: power, energy of the day, both, icon only |
-| Right click | menu: window, report, label, alert threshold, autostart, quit |
+| Right click | menu: window, label, alert threshold, autostart, quit |
 
 The label next to the icon uses the Ayatana property `XAyatanaLabel`. On
 GNOME/Ubuntu and KDE it is always visible; on other compositors it may appear

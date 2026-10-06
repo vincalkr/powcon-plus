@@ -216,7 +216,9 @@ func (a *App) alertOnStartup() {
 	time.Sleep(2 * time.Second)
 	if _, ok := psu.Available(a.cfg.Sensor); !ok {
 		cat := a.catNow()
-		notify.Send("powcon-plus", cat.Get("notif.psu.title"), cat.Get("notif.psu.body"), 0)
+		if err := notify.Send("powcon-plus", cat.Get("notif.psu.title"), cat.Get("notif.psu.body"), 0); err != nil {
+			a.log.Printf("sensor notification failed: %v", err)
+		}
 	}
 }
 
@@ -310,7 +312,9 @@ func (a *App) alertCheck(smp *psu.Sample) {
 	cat := a.cat
 	msg := cat.Sprintf("notif.alert.body", smp.PTot, a.alertW, formatDur(smp.Time.Sub(a.overSince)))
 	a.log.Printf("alert: %s", msg)
-	notify.SendWithIcon("powcon-plus", cat.Get("notif.alert.title"), msg, "dialog-warning", 0)
+	if err := notify.SendWithIcon("powcon-plus", cat.Get("notif.alert.title"), msg, "dialog-warning", 0); err != nil {
+		a.log.Printf("alert notification failed: %v", err)
+	}
 }
 
 // --- state / snapshot ---
@@ -478,9 +482,6 @@ func (a *App) rebuildMenu() {
 		b.Disabled(cat.Sprintf("tray.menu.info", snap.W, snap.TodayWh/1000))
 		b.Separator()
 		b.Item("window", cat.Get("tray.menu.window"), func() { a.launchWindow() })
-		b.Item("report", cat.Get("tray.menu.report"), func() {
-			notify.Send("powcon-plus", cat.Get("tray.menu.report.title"), a.reportText(7), 0)
-		})
 		b.Sub("mode", cat.Get("tray.menu.mode"), func(sb *tray.MenuBuilder) {
 			sb.Radio("mode-power", cat.Get("tray.menu.mode.power"), snap.LabelMode == config.ModePower,
 				func() { a.setLabelMode(config.ModePower) })
@@ -520,29 +521,6 @@ func (a *App) rebuildMenu() {
 		b.Separator()
 		b.Item("quit", cat.Get("tray.menu.quit"), func() { a.Stop() })
 	})
-}
-
-func (a *App) reportText(days int) string {
-	a.mu.RLock()
-	price, cur := a.price, a.currency
-	a.mu.RUnlock()
-	all := a.acc.Days()
-	cat := a.catNow()
-	sym := currency.Symbol(cur)
-	var lines []string
-	total := 0.0
-	for i, d := range all {
-		if i >= days {
-			break
-		}
-		total += d.Wh
-		lines = append(lines, fmt.Sprintf("%s  %6.2f kWh  %5.2f %s  %s",
-			d.Date, d.Wh/1000, d.Cost(price), sym, cat.Sprintf("tray.report.peak", d.MaxW)))
-	}
-	if len(lines) == 0 {
-		return cat.Get("tray.report.empty")
-	}
-	return fmt.Sprintf("%v\n%s", lines, cat.Sprintf("tray.report.total", total/1000, total/1000*price, sym))
 }
 
 func (a *App) effectiveConfig() config.Config {
