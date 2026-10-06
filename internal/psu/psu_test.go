@@ -86,7 +86,7 @@ func TestReadMappingAndScale(t *testing.T) {
 		}
 	}
 	if s.Time.IsZero() {
-		t.Error("Time non valorizzato")
+		t.Error("Time not populated")
 	}
 }
 

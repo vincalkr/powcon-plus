@@ -40,10 +40,10 @@ func TestIntegrationTrapezoid(t *testing.T) {
 		t.Errorf("max/min = %v/%v, expected 100/100", d.MaxW, d.MinW)
 	}
 	if math.Abs(d.Wh12-0.7*d.Wh) > 1e-9 || math.Abs(d.Wh5-0.2*d.Wh) > 1e-9 {
-		t.Errorf("energie per rail non coerenti: %+v", d)
+		t.Errorf("per-rail energies inconsistent: %+v", d)
 	}
 	if d.Wh12 <= 0 || d.Wh5 <= 0 || d.Wh33 <= 0 {
-		t.Errorf("energie per rail = %v/%v/%v, attese > 0", d.Wh12, d.Wh5, d.Wh33)
+		t.Errorf("per-rail energies = %v/%v/%v, expected > 0", d.Wh12, d.Wh5, d.Wh33)
 	}
 }
 

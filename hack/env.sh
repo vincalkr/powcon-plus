@@ -1,5 +1,5 @@
-# Build in ambiente senza scrittura su GOPATH (es. sandbox agente).
-# In un terminale normale di norma NON serve: Go usa GOMODCACHE/GOCACHE di default.
+# Build in an environment without write access to GOPATH (e.g. an agent sandbox).
+# In a normal terminal this is usually NOT needed: Go uses the default GOMODCACHE/GOCACHE.
 export GOFLAGS=-mod=mod
 export GOPATH="${PWD}/.cache/gopath"
 export GOMODCACHE="${GOPATH}/pkg/mod"
