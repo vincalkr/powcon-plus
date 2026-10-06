@@ -3,7 +3,8 @@
 #   make            show this help (no arguments)
 #   make all        bin/powcon-plus (no cgo) + bin/powcon-plus-gui (Fyne)
 #   make test       unit tests (headless and gui tag sets)
-#   make install    copy the binaries to ~/.local/bin
+#   make check      verify the system dependencies
+#   make install    verify the requirements, then copy the binaries to ~/.local/bin
 #
 # In an environment without write access to GOPATH/GOCACHE (e.g. an agent
 # sandbox):
@@ -16,7 +17,7 @@ HEADLESS := $(BIN)/powcon-plus
 GUI      := $(BIN)/powcon-plus-gui
 PREFIX  ?= $(HOME)/.local
 
-.PHONY: help all build gui test vet fmt tidy install uninstall install-autostart uninstall-autostart run clean
+.PHONY: help all build gui test vet fmt tidy check install uninstall install-autostart uninstall-autostart run clean
 
 # `make` with no arguments shows the help (first target = default).
 help:
@@ -30,7 +31,9 @@ help:
 	@echo "  make vet                go vet (both build tag sets)"
 	@echo "  make fmt                check gofmt (prints unformatted files)"
 	@echo "  make tidy               go mod tidy"
-	@echo "  make install            build + copy the binaries to $(PREFIX)/bin"
+	@echo "  make check              verify the system dependencies (sensor, session bus, tray, libraries)"
+	@echo "  make install            build, verify the requirements, then copy to $(PREFIX)/bin"
+	@echo "                          (SKIP_CHECK=1 copies even if a requirement is missing)"
 	@echo "  make uninstall          remove the binaries from $(PREFIX)/bin"
 	@echo "  make install-autostart  write the XDG autostart entry"
 	@echo "  make uninstall-autostart remove the XDG autostart entry"
@@ -61,7 +64,18 @@ fmt:
 tidy:
 	$(GO) mod tidy
 
+# The dependency check runs against the freshly built binary. install refuses
+# to copy anything when an essential requirement is missing; SKIP_CHECK=1
+# bypasses it (cross installs, machines without the PSU attached).
+check: all
+	$(HEADLESS) check
+
 install: all
+ifeq ($(SKIP_CHECK),)
+	@$(HEADLESS) check || { echo "install aborted: the requirements above are missing (SKIP_CHECK=1 to install anyway)"; exit 1; }
+else
+	@echo "skipping the dependency check (SKIP_CHECK=$(SKIP_CHECK))"
+endif
 	mkdir -p $(PREFIX)/bin
 	install -m 755 $(HEADLESS) $(PREFIX)/bin/powcon-plus
 	install -m 755 $(GUI) $(PREFIX)/bin/powcon-plus-gui

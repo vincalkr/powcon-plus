@@ -122,8 +122,13 @@ from starting.
 ## Installation
 
 ```bash
-make install    # copies both binaries into ~/.local/bin
+make install    # verifies the requirements, then copies both binaries into ~/.local/bin
 ```
+
+The dependency check runs before anything is copied and stops the install when
+an essential requirement is missing. `SKIP_CHECK=1` copies anyway, which is
+what a cross install, or a build machine without the power supply attached,
+needs.
 
 `powcon-plus` is the daemon built without cgo, small and portable.
 `powcon-plus-gui` is the same program built with the `gui` tag, which also
