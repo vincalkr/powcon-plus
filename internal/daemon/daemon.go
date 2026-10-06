@@ -576,7 +576,15 @@ func (a *App) launchWindow() {
 	cmd.Stdout, cmd.Stderr = nil, nil
 	if err := cmd.Start(); err != nil {
 		a.log.Printf("opening window: %v", err)
+		return
 	}
+	// Reap the child: without this every window the user closes stays as a
+	// zombie process until the daemon exits.
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			a.log.Printf("window process exited: %v", err)
+		}
+	}()
 }
 
 // pathExists reports whether path exists (any file kind).
