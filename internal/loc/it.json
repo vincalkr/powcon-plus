@@ -42,7 +42,6 @@
   "tray.offline.label": "n/d",
   "tray.offline.tooltip": "Sensore PSU non disponibile",
   "tray.tooltip": "Potenza AC: %.0f W\nOggi: %.2f kWh (%.2f %s)\nMedia oggi: %.0f W · picco %.0f W\n+12V %.1f A · +5V %.1f A · +3.3V %.1f A\nVRM %.1f °C · case %.1f °C · ventola %.0f RPM",
-  "tray.menu.info": "%.0f W · oggi %.2f kWh",
   "tray.menu.window": "Apri dettaglio consumi",
   "tray.menu.mode": "Etichetta nella barra",
   "tray.menu.mode.power": "Potenza (W)",

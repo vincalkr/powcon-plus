@@ -42,7 +42,6 @@
   "tray.offline.label": "无",
   "tray.offline.tooltip": "PSU 传感器不可用",
   "tray.tooltip": "交流功率：%.0f W\n今日：%.2f kWh (%.2f %s)\n今日平均：%.0f W · 峰值 %.0f W\n+12V %.1f A · +5V %.1f A · +3.3V %.1f A\nVRM %.1f °C · 机箱 %.1f °C · 风扇 %.0f RPM",
-  "tray.menu.info": "%.0f W · 今日 %.2f kWh",
   "tray.menu.window": "打开功耗详情",
   "tray.menu.mode": "栏中标签",
   "tray.menu.mode.power": "功率 (W)",

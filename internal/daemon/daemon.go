@@ -479,8 +479,6 @@ func (a *App) rebuildMenu() {
 	installed, _ := autostart.XDGInstalled()
 	cat := a.catNow()
 	a.item.Menu().Rebuild(func(b *tray.MenuBuilder) {
-		b.Disabled(cat.Sprintf("tray.menu.info", snap.W, snap.TodayWh/1000))
-		b.Separator()
 		b.Item("window", cat.Get("tray.menu.window"), func() { a.launchWindow() })
 		b.Sub("mode", cat.Get("tray.menu.mode"), func(sb *tray.MenuBuilder) {
 			sb.Radio("mode-power", cat.Get("tray.menu.mode.power"), snap.LabelMode == config.ModePower,

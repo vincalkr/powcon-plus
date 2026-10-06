@@ -42,7 +42,6 @@
   "tray.offline.label": "k. A.",
   "tray.offline.tooltip": "PSU-Sensor nicht verfügbar",
   "tray.tooltip": "AC-Leistung: %.0f W\nHeute: %.2f kWh (%.2f %s)\nØ heute: %.0f W · Spitze %.0f W\n+12V %.1f A · +5V %.1f A · +3.3V %.1f A\nVRM %.1f °C · Gehäuse %.1f °C · Lüfter %.0f RPM",
-  "tray.menu.info": "%.0f W · heute %.2f kWh",
   "tray.menu.window": "Verbrauchs-Details öffnen",
   "tray.menu.mode": "Beschriftung in der Leiste",
   "tray.menu.mode.power": "Leistung (W)",
