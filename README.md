@@ -49,6 +49,13 @@ make all                    # bin/powcon-plus + bin/powcon-plus-gui
 
 Running `make` with no arguments prints the available targets.
 
+The headless binary (no cgo, no window) can also be installed straight from the
+repository:
+
+```bash
+go install github.com/vincalkr/powcon-plus/cmd/powcon-plus@latest
+```
+
 Commands that are useful while testing:
 
 ```bash
@@ -231,3 +238,11 @@ make vet fmt
 
 The tests that exercise the full SNI/DBusMenu round trip are skipped
 automatically when no session bus is available.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
+
+Copyright (c) 2026 Vincenzo Calendini. The copyright notice and the license
+text must be kept in every copy or substantial portion of the software, so
+authorship stays attributed in any redistribution or derivative work.

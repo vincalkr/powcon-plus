@@ -13,9 +13,9 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
-	"powcon-plus/internal/config"
-	"powcon-plus/internal/energy"
-	"powcon-plus/internal/status"
+	"github.com/vincalkr/powcon-plus/internal/config"
+	"github.com/vincalkr/powcon-plus/internal/energy"
+	"github.com/vincalkr/powcon-plus/internal/status"
 )
 
 func testSnapshot() status.Snapshot {

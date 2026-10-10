@@ -5,7 +5,7 @@ package main
 import (
 	"flag"
 
-	"powcon-plus/internal/gui"
+	"github.com/vincalkr/powcon-plus/internal/gui"
 )
 
 // cmdWindow opens the detail window (only present in -tags gui builds).

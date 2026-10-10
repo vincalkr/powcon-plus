@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"powcon-plus/internal/psu"
+	"github.com/vincalkr/powcon-plus/internal/psu"
 )
 
 func sampleAt(ts time.Time, w float64) *psu.Sample {

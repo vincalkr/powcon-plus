@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"powcon-plus/internal/energy"
-	"powcon-plus/internal/psu"
+	"github.com/vincalkr/powcon-plus/internal/energy"
+	"github.com/vincalkr/powcon-plus/internal/psu"
 )
 
 func TestDailyRoundTrip(t *testing.T) {

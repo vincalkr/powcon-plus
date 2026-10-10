@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"powcon-plus/internal/psu"
+	"github.com/vincalkr/powcon-plus/internal/psu"
 )
 
 // Day is the summary of one day (local timezone).

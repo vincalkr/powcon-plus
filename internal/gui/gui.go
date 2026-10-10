@@ -34,15 +34,15 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"powcon-plus/internal/autostart"
-	"powcon-plus/internal/config"
-	"powcon-plus/internal/ctl"
-	"powcon-plus/internal/currency"
-	"powcon-plus/internal/energy"
-	"powcon-plus/internal/loc"
-	"powcon-plus/internal/psu"
-	"powcon-plus/internal/status"
-	"powcon-plus/internal/version"
+	"github.com/vincalkr/powcon-plus/internal/autostart"
+	"github.com/vincalkr/powcon-plus/internal/config"
+	"github.com/vincalkr/powcon-plus/internal/ctl"
+	"github.com/vincalkr/powcon-plus/internal/currency"
+	"github.com/vincalkr/powcon-plus/internal/energy"
+	"github.com/vincalkr/powcon-plus/internal/loc"
+	"github.com/vincalkr/powcon-plus/internal/psu"
+	"github.com/vincalkr/powcon-plus/internal/status"
+	"github.com/vincalkr/powcon-plus/internal/version"
 )
 
 // Options for opening the window.

@@ -9,8 +9,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"powcon-plus/internal/currency"
-	"powcon-plus/internal/loc"
+	"github.com/vincalkr/powcon-plus/internal/currency"
+	"github.com/vincalkr/powcon-plus/internal/loc"
 )
 
 // LabelMode selects what the panel shows next to the tray icon.

@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"powcon-plus/internal/psu"
+	"github.com/vincalkr/powcon-plus/internal/psu"
 )
 
 // Status is the outcome of a single probe.

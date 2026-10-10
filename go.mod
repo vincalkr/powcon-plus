@@ -1,4 +1,4 @@
-module powcon-plus
+module github.com/vincalkr/powcon-plus
 
 go 1.26
 
