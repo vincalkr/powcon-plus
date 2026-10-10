@@ -11,6 +11,8 @@ summary.
 
 In the GNOME top bar the label takes a form such as `148 W · 2.4 kWh`.
 
+![The detail window: live power chart, rail voltages, temperatures and the per-day summary](docs/screenshot.png)
+
 ## Requirements
 
 - Linux with the `corsairpsu` kernel module (present in recent kernels) and
