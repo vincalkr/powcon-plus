@@ -41,7 +41,9 @@ import (
 	"github.com/vincalkr/powcon-plus/internal/energy"
 	"github.com/vincalkr/powcon-plus/internal/loc"
 	"github.com/vincalkr/powcon-plus/internal/psu"
+	"github.com/vincalkr/powcon-plus/internal/report"
 	"github.com/vincalkr/powcon-plus/internal/status"
+	"github.com/vincalkr/powcon-plus/internal/store"
 	"github.com/vincalkr/powcon-plus/internal/version"
 )
 
@@ -718,25 +720,96 @@ func (u *windowUI) showAbout() {
 	dialog.ShowInformation(u.cat.Get("ui.about.title"), body, u.win)
 }
 
+// showReport exports the daily summaries as a CSV file instead of showing them
+// in a dialog: first how many days to export, then where to save. The columns
+// are the same as `powcon-plus report --csv`.
 func (u *windowUI) showReport() {
-	var b strings.Builder
 	if len(u.days) == 0 {
-		b.WriteString(u.cat.Get("ui.report.empty"))
-	} else {
-		sym := currency.Symbol(u.currency)
-		fmt.Fprintf(&b, "%-10s %8s %8s %7s %7s\n",
-			u.cat.Get("ui.table.date"), u.cat.Get("ui.table.kwh"), sym,
-			u.cat.Get("ui.table.avg"), u.cat.Get("ui.table.peak"))
-		var tot float64
-		for _, d := range u.days {
-			tot += d.Wh
-			fmt.Fprintf(&b, "%-10s %8.3f %8.2f %7.0f %7.0f\n",
-				d.Date, d.Wh/1000, d.Cost(u.price), d.AvgW(), d.MaxW)
-		}
-		fmt.Fprintf(&b, "%-10s %8.3f %8.2f\n",
-			u.cat.Get("ui.report.total"), tot/1000, tot/1000*u.price)
+		dialog.ShowInformation(u.cat.Get("ui.report.title"), u.cat.Get("ui.report.empty"), u.win)
+		return
 	}
-	dialog.ShowInformation(u.cat.Get("ui.report.title"), b.String(), u.win)
+	entry := widget.NewEntry()
+	entry.SetPlaceHolder("0")
+	form := dialog.NewForm(
+		u.cat.Get("ui.report.title"),
+		u.cat.Get("ui.report.export"),
+		u.cat.Get("ui.report.cancel"),
+		[]*widget.FormItem{widget.NewFormItem(u.cat.Get("ui.report.days"), entry)},
+		func(ok bool) {
+			if ok {
+				u.askReportFile(parseDayCount(entry.Text))
+			}
+		},
+		u.win,
+	)
+	form.Resize(fyne.NewSize(420, 180))
+	form.Show()
+}
+
+// parseDayCount reads the requested number of days: anything that is not a
+// positive number means every day available.
+func parseDayCount(s string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+// askReportFile opens the "save as" dialog and writes the CSV into the chosen
+// file, then confirms with the path.
+func (u *windowUI) askReportFile(n int) {
+	days := report.MostRecent(u.reportDays(), n)
+	if len(days) == 0 {
+		dialog.ShowInformation(u.cat.Get("ui.report.title"), u.cat.Get("ui.report.empty"), u.win)
+		return
+	}
+	save := dialog.NewFileSave(func(wc fyne.URIWriteCloser, err error) {
+		if wc == nil { // cancelled, or nothing usable selected
+			if err != nil {
+				dialog.ShowError(err, u.win)
+			}
+			return
+		}
+		defer wc.Close()
+		if werr := report.Write(wc, days, u.price); werr != nil {
+			dialog.ShowError(werr, u.win)
+			return
+		}
+		dialog.ShowInformation(u.cat.Get("ui.report.title"),
+			u.cat.Sprintf("ui.report.saved", wc.URI().Path()), u.win)
+	}, u.win)
+	save.SetTitleText(u.cat.Get("ui.report.title"))
+	save.SetFileName(reportFileName(days))
+	save.Show()
+}
+
+// reportFileName suggests a name covering the exported range (days are newest
+// first): powcon-plus-report-2026-10-12-2026-10-06.csv
+func reportFileName(days []energy.Day) string {
+	switch len(days) {
+	case 0:
+		return "powcon-plus-report.csv"
+	case 1:
+		return "powcon-plus-report-" + days[0].Date + ".csv"
+	default:
+		return "powcon-plus-report-" + days[0].Date + "-" + days[len(days)-1].Date + ".csv"
+	}
+}
+
+// reportDays returns the days available for the export: the whole history on
+// disk, with the values carried by the live snapshot taking precedence, since
+// today's row is flushed to disk only periodically.
+func (u *windowUI) reportDays() []energy.Day {
+	st, err := store.New(filepath.Dir(u.sock))
+	if err != nil {
+		return u.days
+	}
+	all, err := st.LoadDaily()
+	if err != nil || len(all) == 0 {
+		return u.days
+	}
+	return report.MergeNewer(all, u.days)
 }
 
 // --- data feed (goroutine) ---

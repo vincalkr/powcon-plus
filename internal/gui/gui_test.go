@@ -4,6 +4,8 @@
 package gui
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -220,5 +222,76 @@ func TestPowerChartSpreadsSeriesHorizontally(t *testing.T) {
 	}
 	if maxX > size.Width {
 		t.Errorf("series overflows the widget: maxX = %.0f", maxX)
+	}
+}
+
+// --- CSV export (Report button) ---
+
+func TestParseDayCount(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want int
+	}{
+		{"", 0}, {"0", 0}, {"7", 7}, {"  3  ", 3}, {"-2", 0}, {"all", 0}, {"1e3", 0},
+	} {
+		if got := parseDayCount(c.in); got != c.want {
+			t.Errorf("parseDayCount(%q) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
+func TestReportFileNameCoversTheRange(t *testing.T) {
+	if got := reportFileName(nil); got != "powcon-plus-report.csv" {
+		t.Errorf("empty = %q", got)
+	}
+	one := []energy.Day{{Date: "2026-10-12"}}
+	if got := reportFileName(one); got != "powcon-plus-report-2026-10-12.csv" {
+		t.Errorf("one day = %q", got)
+	}
+	// newest first, as MostRecent returns them
+	many := []energy.Day{{Date: "2026-10-12"}, {Date: "2026-10-11"}, {Date: "2026-10-06"}}
+	if got := reportFileName(many); got != "powcon-plus-report-2026-10-12-2026-10-06.csv" {
+		t.Errorf("range = %q", got)
+	}
+}
+
+func TestReportDaysPrefersSnapshotOverDisk(t *testing.T) {
+	u := newTestUI(t)
+	dir := filepath.Dir(u.sock)
+
+	onDisk := []energy.Day{
+		{Date: "2026-10-11", Wh: 4000},
+		{Date: "2026-10-12", Wh: 1000}, // today, flushed earlier: stale
+	}
+	b, err := json.Marshal(onDisk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "daily.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	u.days = []energy.Day{{Date: "2026-10-12", Wh: 2500}} // live today
+
+	got := u.reportDays()
+	if len(got) != 2 {
+		t.Fatalf("reportDays returned %d days, want 2", len(got))
+	}
+	want := map[string]float64{"2026-10-11": 4000, "2026-10-12": 2500}
+	for _, d := range got {
+		if w, ok := want[d.Date]; !ok {
+			t.Errorf("unexpected day %s", d.Date)
+		} else if d.Wh != w {
+			t.Errorf("%s: Wh = %v, want %v (the snapshot must win)", d.Date, d.Wh, w)
+		}
+	}
+}
+
+func TestReportDaysWithoutHistoryOnDisk(t *testing.T) {
+	u := newTestUI(t)
+	u.days = []energy.Day{{Date: "2026-10-12", Wh: 10}}
+
+	got := u.reportDays()
+	if len(got) != 1 || got[0].Wh != 10 {
+		t.Errorf("reportDays = %+v, want the snapshot days", got)
 	}
 }

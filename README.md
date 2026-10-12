@@ -62,7 +62,8 @@ Commands that are useful while testing:
 
 ```bash
 ./bin/powcon-plus status           # immediate reading, works without a daemon too
-./bin/powcon-plus report --days 7  # kWh and cost per day
+./bin/powcon-plus report --days 7  # kWh and cost per day (0 = every day)
+./bin/powcon-plus report --csv     # the same rows as CSV, newest first
 ./bin/powcon-plus window           # detail window
 ./bin/powcon-plus run --no-tray    # data collection only, no icon
 ./bin/powcon-plus version          # installed version
@@ -97,6 +98,15 @@ selector, the cost-per-kWh field with its currency selector, the Info button
 Below the bar are the daemon status, the current power reading, a chart of the
 last 30 minutes, the rail voltages and temperatures, the fan, and the table of
 days.
+
+The **Report** button exports the days as a CSV file instead of showing them in
+a dialog: it first asks how many days to export (`0` or empty = every day on
+disk, which can be more than the 14 shown in the table) and then where to save
+it. The columns are the same as `powcon-plus report --csv` —
+`date,kwh,cost,avg_w,peak_w,min_w,samples` — newest day first, with the cost
+computed from the tariff currently set in the bar. The suggested file name
+covers the exported range, for example
+`powcon-plus-report-2026-10-12-2026-10-06.csv`.
 
 The reported cost is an estimate: the tariff is entered by the user in the
 cost-per-kWh field. The currency selector (EUR, USD, GBP, CNY, JPY) determines
@@ -200,7 +210,11 @@ Examples of analysis:
 ```bash
 jq -s 'map(.w) | add/length' ~/.local/share/powcon-plus/samples-$(date +%F).jsonl
 powcon-plus report --csv | column -t -s,
+powcon-plus report --days 0 --csv > report.csv   # every day on disk
 ```
+
+`report` prints the most recent days first, like the window's table; `--days 0`
+means no limit. The same CSV is written by the window's Report button.
 
 ## Architecture
 
