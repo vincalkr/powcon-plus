@@ -10,7 +10,6 @@ package main
 
 import (
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -31,6 +30,7 @@ import (
 	"github.com/vincalkr/powcon-plus/internal/deps"
 	"github.com/vincalkr/powcon-plus/internal/energy"
 	"github.com/vincalkr/powcon-plus/internal/psu"
+	"github.com/vincalkr/powcon-plus/internal/report"
 	"github.com/vincalkr/powcon-plus/internal/status"
 	"github.com/vincalkr/powcon-plus/internal/store"
 	"github.com/vincalkr/powcon-plus/internal/version"
@@ -95,7 +95,8 @@ Usage:
   powcon-plus run [flags]            start the daemon with a tray icon (default)
   powcon-plus status [--json]        one-shot reading (uses the daemon when up)
   powcon-plus report [--days N] [--csv]
-                                     per-day kWh/cost summary
+                                     per-day kWh/cost summary, newest first
+                                     (N=0 → every day on disk)
   powcon-plus window                 detail window (gui-tagged build)
   powcon-plus ctl <cmd> [k=v...]     control the daemon
                                       (status|config|pause|resume|label-mode|alert|ui-language|price|autostart-status|autostart-set enabled=1|quit)
@@ -239,7 +240,7 @@ func printSnapshot(s status.Snapshot, cfg config.Config, asJSON bool) {
 func cmdReport(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
 	configPath := fs.String("config", "", "configuration file")
-	days := fs.Int("days", 14, "days to show")
+	days := fs.Int("days", 14, "days to show, from the most recent (0 = all)")
 	asCSV := fs.Bool("csv", false, "output CSV")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -260,19 +261,10 @@ func cmdReport(args []string) error {
 		fmt.Println("no data: run `powcon-plus run` to collect samples.")
 		return nil
 	}
-	if len(all) > *days {
-		all = all[:*days]
-	}
-	w := csv.NewWriter(os.Stdout)
+	// Newest first, like the window's table: --days keeps the most recent ones.
+	all = report.MostRecent(all, *days)
 	if *asCSV {
-		w.Write([]string{"date", "kwh", "cost", "avg_w", "peak_w", "min_w", "samples"})
-		for _, d := range all {
-			w.Write([]string{d.Date, fmt.Sprintf("%.3f", d.Wh/1000),
-				fmt.Sprintf("%.3f", d.Cost(cfg.PricePerKWh)), fmt.Sprintf("%.0f", d.AvgW()),
-				fmt.Sprintf("%.0f", d.MaxW), fmt.Sprintf("%.0f", d.MinW), strconv.Itoa(d.Samples)})
-		}
-		w.Flush()
-		return w.Error()
+		return report.Write(os.Stdout, all, cfg.PricePerKWh)
 	}
 	var tot float64
 	sym := currency.Symbol(cfg.Currency)
